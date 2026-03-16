@@ -35,10 +35,11 @@ router.get('/callback',
     console.log('\n========== AUTHENTICATION SUCCESS ==========');
     console.log('User:', JSON.stringify(req.user, null, 2));
     console.log('Session ID:', req.sessionID);
-    console.log('Redirecting to:', process.env.FRONTEND_URL || 'http://localhost:5173');
+    const redirectUrl = (process.env.FRONTEND_URL || 'https://host.docker.internal') + '/inbox';
+    console.log('Redirecting to inbox:', redirectUrl);
     console.log('===========================================\n');
     // Successful authentication with validated ID token signature
-    res.redirect(process.env.FRONTEND_URL || 'http://localhost:5173');
+    res.redirect(redirectUrl);
   }
 );
 
@@ -62,10 +63,11 @@ router.get('/oauth2/authorize',
     console.log('\n========== AUTHENTICATION SUCCESS (OAUTH2) ==========');
     console.log('User:', JSON.stringify(req.user, null, 2));
     console.log('Session ID:', req.sessionID);
-    console.log('Redirecting to:', process.env.FRONTEND_URL || 'http://localhost:5173');
+    const redirectUrl = (process.env.FRONTEND_URL || 'https://host.docker.internal') + '/inbox';
+    console.log('Redirecting to inbox:', redirectUrl);
     console.log('====================================================\n');
     // Successful authentication with validated ID token signature
-    res.redirect(process.env.FRONTEND_URL || 'http://localhost:5173');
+    res.redirect(redirectUrl);
   }
 );
 
