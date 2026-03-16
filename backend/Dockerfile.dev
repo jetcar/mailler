@@ -1,0 +1,21 @@
+# Development Dockerfile for Backend
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Copy package files first (for layer caching)
+COPY package*.json ./
+
+# Install dependencies (use npm install to handle package.json updates)
+# This will populate /app/node_modules in the container
+# The volume mount will preserve this between container restarts
+RUN npm install
+
+# Copy rest of application (will be overridden by volume mounts in development)
+COPY . .
+
+# Expose port
+EXPOSE 3000
+
+# Default command (can be overridden in docker-compose.yml)
+CMD ["npm", "run", "dev"]

@@ -1,0 +1,125 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: 'postgres:15.5'
+    container_name: mailler-postgres
+    env_file:
+      - .env.test
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d mailler" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mailler-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: mailler-backend
+    env_file:
+      - .env.test
+    environment:
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    volumes:
+      # Mount source code for hot reload
+      - ./backend/src:/app/src:ro
+      - ./backend/tests:/app/tests:ro
+      - ./database:/app/database:ro
+      # Use named volume for node_modules (prevents re-download)
+      - backend_node_modules:/app/node_modules
+      # Share package.json and package-lock.json
+      - ./backend/package.json:/app/package.json:ro
+      - ./backend/package-lock.json:/app/package-lock.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - mailler-network
+    command: npm run dev
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: mailler-frontend
+    environment:
+      NODE_ENV: development
+      # Vite specific - enable HMR
+      VITE_HMR_PROTOCOL: wss
+      VITE_HMR_HOST: localhost
+    ports:
+      - "5173:5173"
+    volumes:
+      # Mount source code for hot reload
+      - ./frontend/src:/app/src
+      - ./frontend/index.html:/app/index.html
+      - ./frontend/vite.config.js:/app/vite.config.js
+      - ./frontend/package.json:/app/package.json:ro
+      - ./frontend/package-lock.json:/app/package-lock.json:ro
+      # Use named volume for node_modules
+      - frontend_node_modules:/app/node_modules
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - mailler-network
+    command: npm run dev -- --host 0.0.0.0
+
+  test-oidc-provider:
+    build:
+      context: ./test-oidc-provider
+      dockerfile: Dockerfile
+    container_name: test-oidc-provider
+    env_file:
+      - .env.test
+    environment:
+      PORT: 9000
+    ports:
+      - "9000:9000"
+    restart: unless-stopped
+    networks:
+      - mailler-network
+    healthcheck:
+      test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9000/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  haproxy:
+    image: haproxy:3.1.2
+    container_name: mailler-haproxy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8404:8404" # Stats page
+    volumes:
+      - ./haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+      - ./certs:/usr/local/etc/haproxy/certs:ro
+    depends_on:
+      - backend
+      - frontend
+    restart: unless-stopped
+    networks:
+      - mailler-network
+
+volumes:
+  postgres_data:
+    driver: local
+  backend_node_modules:
+    driver: local
+  frontend_node_modules:
+    driver: local
+
+networks:
+  mailler-network:
+    driver: bridge
