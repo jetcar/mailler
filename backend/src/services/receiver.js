@@ -1,106 +1,75 @@
-const imaps = require('imap-simple');
-const { simpleParser } = require('mailparser');
 const { EmailAccount, Message } = require('../models');
 
 class ReceiverService {
   /**
-   * Fetch emails from an IMAP account
+   * Get emails from database (no external IMAP fetch needed - we receive directly via SMTP)
    * @param {number} accountId - Email account ID
    * @param {string} folder - Email folder (default: INBOX)
    * @param {number} limit - Number of emails to fetch
    */
   async fetchEmails(accountId, folder = 'INBOX', limit = 50) {
-    let connection;
-    
     try {
       const account = await EmailAccount.findByPk(accountId);
-      
+
       if (!account) {
         throw new Error('Email account not found');
       }
 
-      const config = {
-        imap: {
-          user: account.imap_username,
-          password: account.getDecryptedImapPassword(),
-          host: account.imap_host,
-          port: account.imap_port,
-          tls: true,
-          tlsOptions: { rejectUnauthorized: false }
-        }
-      };
+      // Fetch messages from database (already received via SMTP)
+      const messages = await Message.findAll({
+        where: {
+          account_id: accountId,
+          folder: folder
+        },
+        order: [['received_date', 'DESC']],
+        limit: limit
+      });
 
-      connection = await imaps.connect(config);
-      await connection.openBox(folder);
-
-      // Search for all emails
-      const searchCriteria = ['ALL'];
-      const fetchOptions = {
-        bodies: ['HEADER', 'TEXT'],
-        markSeen: false
-      };
-
-      const messages = await connection.search(searchCriteria, fetchOptions);
-      const parsedMessages = [];
-
-      for (const item of messages.slice(-limit)) {
-        const all = item.parts.find(part => part.which === '');
-        const id = item.attributes.uid;
-        const idHeader = 'Imap-Id: ' + id + '\r\n';
-        
-        const parsed = await simpleParser(idHeader + all.body);
-        
-        parsedMessages.push({
-          uid: id,
-          messageId: parsed.messageId,
-          from: parsed.from?.text,
-          to: parsed.to?.text,
-          cc: parsed.cc?.text,
-          subject: parsed.subject,
-          date: parsed.date,
-          text: parsed.text,
-          html: parsed.html,
-          attachments: parsed.attachments?.map(a => ({
-            filename: a.filename,
-            contentType: a.contentType,
-            size: a.size
-          }))
-        });
-      }
-
-      connection.end();
-      return parsedMessages;
+      return messages.map(msg => ({
+        id: msg.id,
+        messageId: msg.message_id,
+        from: msg.from_address,
+        to: msg.to_addresses,
+        cc: msg.cc_addresses,
+        subject: msg.subject,
+        date: msg.received_date,
+        text: msg.body_text,
+        html: msg.body_html,
+        isRead: msg.is_read,
+        isStarred: msg.is_starred
+      }));
     } catch (error) {
-      if (connection) connection.end();
       console.error('Error fetching emails:', error);
       throw error;
     }
   }
 
   /**
-   * Sync emails from IMAP to database
+   * Sync emails (no-op for pure email server - emails arrive via SMTP automatically)
    * @param {number} accountId - Email account ID
    */
   async syncEmails(accountId) {
     try {
-      const emails = await this.fetchEmails(accountId);
-      
-      for (const email of emails) {
-        await Message.upsert({
-          account_id: accountId,
-          message_id: email.messageId,
-          from_address: email.from,
-          to_addresses: email.to,
-          cc_addresses: email.cc,
-          subject: email.subject,
-          body_text: email.text,
-          body_html: email.html,
-          received_date: email.date,
-          folder: 'INBOX'
-        });
+      // For a pure email server, we don't need to sync from external IMAP
+      // Emails are received directly via SMTP and stored by smtp-listener
+      const account = await EmailAccount.findByPk(accountId);
+
+      if (!account) {
+        throw new Error('Email account not found');
       }
 
-      return { synced: emails.length };
+      // Just return count of existing messages
+      const count = await Message.count({
+        where: { account_id: accountId }
+      });
+
+      console.log(`📧 Email account ${account.email_address} has ${count} messages (received via SMTP)`);
+
+      return {
+        synced: 0,
+        total: count,
+        message: 'Emails are received automatically via SMTP server'
+      };
     } catch (error) {
       console.error('Error syncing emails:', error);
       throw error;

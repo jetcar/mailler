@@ -1,29 +1,27 @@
 const nodemailer = require('nodemailer');
-const { EmailAccount } = require('../models');
+const { EmailAccount, Message } = require('../models');
 
 class MailerService {
   /**
-   * Send an email using the specified account
+   * Send an email from a local account
    * @param {number} accountId - Email account ID
    * @param {Object} mailOptions - Email options (to, subject, text, html, attachments)
    */
   async sendEmail(accountId, mailOptions) {
     try {
       const account = await EmailAccount.findByPk(accountId);
-      
+
       if (!account) {
         throw new Error('Email account not found');
       }
 
-      // Create transporter with account settings
+      // Create transporter using local SMTP server (no auth required for local server)
       const transporter = nodemailer.createTransport({
-        host: account.smtp_host,
-        port: account.smtp_port,
-        secure: account.smtp_port === 465,
-        auth: {
-          user: account.smtp_username,
-          pass: account.getDecryptedSmtpPassword()
-        }
+        host: process.env.SMTP_HOST || 'localhost',
+        port: process.env.SMTP_SEND_PORT || 587,
+        secure: false,
+        ignoreTLS: true, // For local server, we don't need TLS
+        auth: undefined // No authentication for local server
       });
 
       // Send email
@@ -38,10 +36,28 @@ class MailerService {
         attachments: mailOptions.attachments
       });
 
-      console.log('Email sent:', info.messageId);
+      console.log('📤 Email sent from', account.email_address, 'to', mailOptions.to);
+      console.log('   Message ID:', info.messageId);
+
+      // Store sent message in database
+      await Message.create({
+        account_id: accountId,
+        message_id: info.messageId,
+        from_address: account.email_address,
+        to_addresses: mailOptions.to,
+        cc_addresses: mailOptions.cc || '',
+        subject: mailOptions.subject || '(no subject)',
+        body_text: mailOptions.text || '',
+        body_html: mailOptions.html || '',
+        received_date: new Date(),
+        folder: 'SENT',
+        is_read: true,
+        is_starred: false
+      });
+
       return info;
     } catch (error) {
-      console.error('Error sending email:', error);
+      console.error('❌ Error sending email:', error);
       throw error;
     }
   }

@@ -29,11 +29,16 @@ services:
       PORT: 3000
     ports:
       - "3000:3000"
+      - "25:25" # SMTP - Standard mail transfer
+      - "587:587" # SMTP Submission - Mail clients (STARTTLS)
+      - "465:465" # SMTPS - SMTP over SSL
     volumes:
       # Mount source code for hot reload
       - ./backend/src:/app/src:ro
       - ./backend/tests:/app/tests:ro
       - ./database:/app/database:ro
+      # Mount SSL certificates for SMTP
+      - ./certs:/certs:ro
       # Use named volume for node_modules (prevents re-download)
       - backend_node_modules:/app/node_modules
       # Share package.json and package-lock.json

@@ -72,6 +72,15 @@ api.interceptors.response.use(
       console.error(`   Status: ${error.response.status} ${error.response.statusText}`);
       console.error(`   Duration: ${duration}ms`);
       console.error(`   Error Data:`, error.response.data);
+
+      // Redirect to login page on 401 Unauthorized
+      if (error.response.status === 401) {
+        console.warn('⚠️  Unauthorized - redirecting to login page');
+        // Only redirect if not already on login page
+        if (!window.location.pathname.includes('/auth/login') && window.location.pathname !== '/') {
+          window.location.href = '/';
+        }
+      }
     } else if (error.request) {
       // Request made but no response
       console.error(`\n❌ [${timestamp}] No Response`);

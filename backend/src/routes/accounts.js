@@ -11,7 +11,7 @@ router.get('/', ensureAuthenticated, async (req, res, next) => {
       where: { user_id: req.user.id },
       attributes: { exclude: ['imap_password', 'smtp_password'] }
     });
-    
+
     res.json({ accounts });
   } catch (error) {
     next(error);
@@ -23,7 +23,7 @@ router.get('/:id', ensureAuthenticated, ensureOwnership(EmailAccount), async (re
   const account = req.resource.toJSON();
   delete account.imap_password;
   delete account.smtp_password;
-  
+
   res.json({ account });
 });
 
@@ -32,21 +32,12 @@ router.post('/', ensureAuthenticated, async (req, res, next) => {
   try {
     const {
       email_address,
-      imap_host,
-      imap_port,
-      imap_username,
-      imap_password,
-      smtp_host,
-      smtp_port,
-      smtp_username,
-      smtp_password,
       is_default
     } = req.body;
 
     // Validation
-    if (!email_address || !imap_host || !imap_username || !imap_password ||
-        !smtp_host || !smtp_username || !smtp_password) {
-      return res.status(400).json({ error: 'Missing required fields' });
+    if (!email_address) {
+      return res.status(400).json({ error: 'Email address is required' });
     }
 
     // If this is set as default, unset other defaults
@@ -60,22 +51,10 @@ router.post('/', ensureAuthenticated, async (req, res, next) => {
     const account = await EmailAccount.create({
       user_id: req.user.id,
       email_address,
-      imap_host,
-      imap_port: imap_port || 993,
-      imap_username,
-      imap_password,
-      smtp_host,
-      smtp_port: smtp_port || 587,
-      smtp_username,
-      smtp_password,
       is_default: is_default || false
     });
 
-    const result = account.toJSON();
-    delete result.imap_password;
-    delete result.smtp_password;
-
-    res.status(201).json({ account: result });
+    res.status(201).json({ account: account.toJSON() });
   } catch (error) {
     next(error);
   }
@@ -85,10 +64,7 @@ router.post('/', ensureAuthenticated, async (req, res, next) => {
 router.put('/:id', ensureAuthenticated, ensureOwnership(EmailAccount), async (req, res, next) => {
   try {
     const updates = {};
-    const allowedFields = [
-      'email_address', 'imap_host', 'imap_port', 'imap_username', 'imap_password',
-      'smtp_host', 'smtp_port', 'smtp_username', 'smtp_password', 'is_default'
-    ];
+    const allowedFields = ['email_address', 'is_default'];
 
     allowedFields.forEach(field => {
       if (req.body[field] !== undefined) {
@@ -106,11 +82,7 @@ router.put('/:id', ensureAuthenticated, ensureOwnership(EmailAccount), async (re
 
     await req.resource.update(updates);
 
-    const result = req.resource.toJSON();
-    delete result.imap_password;
-    delete result.smtp_password;
-
-    res.json({ account: result });
+    res.json({ account: req.resource.toJSON() });
   } catch (error) {
     next(error);
   }

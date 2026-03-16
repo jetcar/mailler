@@ -7,9 +7,12 @@ require('dotenv').config();
 
 const { testConnection } = require('./config/database');
 const { initializeDatabase } = require('./utils/migrationRunner');
+const smtpListener = require('./services/smtp-listener');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const SMTP_PORTS = (process.env.SMTP_PORTS || '25,587,465')
+  .split(',').map(p => parseInt(p.trim()));
 
 // Trust proxy - important for HAProxy/reverse proxy setups
 if (process.env.TRUST_PROXY === 'true') {
@@ -119,6 +122,9 @@ async function start() {
       console.log(`Mailler backend running on port ${PORT}`);
       console.log(`Environment: ${process.env.NODE_ENV}`);
     });
+
+    // Start SMTP servers for receiving emails on multiple ports
+    smtpListener.startMultiple(SMTP_PORTS);
   } catch (error) {
     console.error('Failed to start server:', error);
     process.exit(1);

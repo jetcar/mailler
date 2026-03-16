@@ -1,7 +1,7 @@
 const passport = require('passport');
 const CustomStrategy = require('passport-custom').Strategy;
 const { Issuer, generators, custom } = require('openid-client');
-const { User } = require('../models');
+const { User, EmailAccount } = require('../models');
 const http = require('http');
 const https = require('https');
 
@@ -151,6 +151,14 @@ passport.use('oidc', new CustomStrategy(async (req, done) => {
           email: user.email,
           display_name: user.display_name
         }, null, 2));
+
+        // Auto-create local email account for the user
+        const emailAccount = await EmailAccount.create({
+          user_id: user.id,
+          email_address: claims.email,
+          is_default: true
+        });
+        console.log('📧 Email account created:', emailAccount.email_address);
       } else {
         console.log('✅ Existing user found, updating information...');
         await user.update({
@@ -162,6 +170,26 @@ passport.use('oidc', new CustomStrategy(async (req, done) => {
           email: user.email,
           display_name: user.display_name
         }, null, 2));
+
+        // Ensure user has an email account
+        let emailAccount = await EmailAccount.findOne({
+          where: { user_id: user.id }
+        });
+
+        if (!emailAccount) {
+          emailAccount = await EmailAccount.create({
+            user_id: user.id,
+            email_address: claims.email,
+            is_default: true
+          });
+          console.log('📧 Email account created:', emailAccount.email_address);
+        } else {
+          // Update email address if changed
+          if (emailAccount.email_address !== claims.email) {
+            await emailAccount.update({ email_address: claims.email });
+            console.log('📧 Email account updated:', emailAccount.email_address);
+          }
+        }
       }
 
       console.log('\n✅ Authentication complete, passing user to passport\n');
