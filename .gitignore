@@ -15,6 +15,9 @@ postgres_data/
 logs/
 *.log
 
+# Debug emails
+backend/debug-emails/
+
 # OS
 .DS_Store
 Thumbs.db

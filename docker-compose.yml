@@ -42,8 +42,8 @@ services:
       # Use named volume for node_modules (prevents re-download)
       - backend_node_modules:/app/node_modules
       # Share package.json and package-lock.json
-      - ./backend/package.json:/app/package.json:ro
-      - ./backend/package-lock.json:/app/package-lock.json:ro
+      - ./backend/package.json:/app/package.json
+      - ./backend/package-lock.json:/app/package-lock.json
     depends_on:
       postgres:
         condition: service_healthy

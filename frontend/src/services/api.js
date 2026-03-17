@@ -117,6 +117,9 @@ export const messagesAPI = {
   get: (id) => api.get(`/api/messages/${id}`),
   send: (data) => api.post('/api/messages/send', data),
   sync: (accountId) => api.post('/api/messages/sync', { account_id: accountId }),
+  import: (data) => api.post('/api/messages/import', data),
+  fetchFolders: (data) => api.post('/api/messages/import/folders', data),
+  importMulti: (data) => api.post('/api/messages/import/multi', data),
   update: (id, data) => api.patch(`/api/messages/${id}`, data),
   delete: (id) => api.delete(`/api/messages/${id}`)
 };

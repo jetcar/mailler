@@ -39,7 +39,7 @@ export default function Settings() {
     e.preventDefault();
     try {
       await accountsAPI.create(formData);
-      alert('Account added successfully!');
+      console.log('Account added successfully');
       setShowForm(false);
       setFormData({
         email_address: '',
@@ -55,19 +55,19 @@ export default function Settings() {
       });
       loadAccounts();
     } catch (error) {
-      alert('Failed to add account: ' + error.message);
+      console.error('Failed to add account:', error.message);
     }
   };
 
   const handleDelete = async (id) => {
     if (!confirm('Are you sure you want to delete this account?')) return;
-    
+
     try {
       await accountsAPI.delete(id);
-      alert('Account deleted successfully!');
+      console.log('Account deleted successfully');
       loadAccounts();
     } catch (error) {
-      alert('Failed to delete account: ' + error.message);
+      console.error('Failed to delete account:', error.message);
     }
   };
 
@@ -92,7 +92,7 @@ export default function Settings() {
           {showForm && (
             <form onSubmit={handleSubmit} style={styles.form}>
               <h3>Add Email Account</h3>
-              
+
               <div style={styles.formRow}>
                 <div style={styles.field}>
                   <label style={styles.label}>Email Address *</label>

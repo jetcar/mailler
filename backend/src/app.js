@@ -2,6 +2,8 @@ const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
 const session = require('express-session');
+const RedisStore = require('connect-redis').default;
+const { createClient } = require('redis');
 const { passport } = require('./config/passport');
 require('dotenv').config();
 
@@ -28,8 +30,37 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Initialize Redis client for sessions
+const redisClient = createClient({
+  url: process.env.REDIS_URL || 'redis://redis:6379',
+  socket: {
+    reconnectStrategy: (retries) => {
+      if (retries > 10) {
+        console.error('❌ Redis reconnection failed after 10 attempts');
+        return new Error('Redis reconnection failed');
+      }
+      return retries * 100; // Exponential backoff
+    }
+  }
+});
+
+redisClient.on('error', (err) => console.error('❌ Redis Client Error:', err));
+redisClient.on('connect', () => console.log('🔗 Redis client connecting...'));
+redisClient.on('ready', () => console.log('✅ Redis client connected and ready'));
+
+// Connect to Redis (async operation, but session middleware will wait)
+redisClient.connect().catch(err => {
+  console.error('❌ Failed to connect to Redis:', err);
+  process.exit(1);
+});
+
 // Session configuration
 app.use(session({
+  store: new RedisStore({
+    client: redisClient,
+    prefix: 'mailler:sess:',
+    ttl: 24 * 60 * 60 // 24 hours in seconds
+  }),
   secret: process.env.SESSION_SECRET || 'your-secret-key',
   resave: false,
   saveUninitialized: false,

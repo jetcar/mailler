@@ -35,19 +35,19 @@ export default function Compose() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!formData.account_id || !formData.to || !formData.subject) {
-      alert('Please fill in all required fields');
+      console.warn('Required fields missing: account_id, to, subject');
       return;
     }
 
     try {
       setSending(true);
       await messagesAPI.send(formData);
-      alert('Email sent successfully!');
+      console.log('Email sent successfully');
       window.location.href = '/inbox';
     } catch (error) {
-      alert('Failed to send email: ' + error.message);
+      console.error('Failed to send email:', error.message);
     } finally {
       setSending(false);
     }
