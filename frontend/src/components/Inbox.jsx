@@ -626,8 +626,8 @@ export default function Inbox() {
                       style={styles.checkbox}
                     />
                     <span>
-                      {selectedMessageIds.size > 0 
-                        ? `${selectedMessageIds.size} selected` 
+                      {selectedMessageIds.size > 0
+                        ? `${selectedMessageIds.size} selected`
                         : `${folderFilteredMessages.length} message${folderFilteredMessages.length !== 1 ? 's' : ''}`}
                     </span>
                   </label>
