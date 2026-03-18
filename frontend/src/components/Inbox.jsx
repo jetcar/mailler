@@ -18,8 +18,7 @@ export default function Inbox() {
     imap_host: 'imap.gmail.com',
     imap_port: 993,
     imap_username: '',
-    imap_password: '',
-    limit_per_folder: 100
+    imap_password: ''
   });
   const [importProgress, setImportProgress] = useState({
     isImporting: false,
@@ -31,6 +30,10 @@ export default function Inbox() {
     folderResults: [],
     logs: []
   });
+  const [selectedFolder, setSelectedFolder] = useState('All');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(50);
+  const [currentSessionId, setCurrentSessionId] = useState(null);
 
   useEffect(() => {
     init();
@@ -124,7 +127,22 @@ export default function Inbox() {
       msg.body_text?.toLowerCase().includes(query)
     );
     setFilteredMessages(filtered);
+    setCurrentPage(1); // Reset to first page on search
   }, [searchQuery, messages]);
+
+  // Get unique folders from messages
+  const folders = ['All', ...new Set(messages.map(msg => msg.folder).filter(Boolean))];
+
+  // Filter messages by selected folder and search
+  const folderFilteredMessages = selectedFolder === 'All'
+    ? filteredMessages
+    : filteredMessages.filter(msg => msg.folder === selectedFolder);
+
+  // Pagination
+  const totalPages = Math.ceil(folderFilteredMessages.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedMessages = folderFilteredMessages.slice(startIndex, endIndex);
 
   const handleSearch = (e) => {
     setSearchQuery(e.target.value);
@@ -141,10 +159,19 @@ export default function Inbox() {
   };
 
   const toggleSelectAll = () => {
-    if (selectedMessageIds.size === filteredMessages.length) {
-      setSelectedMessageIds(new Set());
+    const currentPageIds = paginatedMessages.map(m => m.id);
+    const allCurrentSelected = currentPageIds.every(id => selectedMessageIds.has(id));
+
+    if (allCurrentSelected) {
+      // Deselect all on current page
+      setSelectedMessageIds(prev => {
+        const newSet = new Set(prev);
+        currentPageIds.forEach(id => newSet.delete(id));
+        return newSet;
+      });
     } else {
-      setSelectedMessageIds(new Set(filteredMessages.map(m => m.id)));
+      // Select all on current page
+      setSelectedMessageIds(prev => new Set([...prev, ...currentPageIds]));
     }
   };
 
@@ -293,6 +320,7 @@ export default function Inbox() {
 
     try {
       setShowImportDialog(false);
+      setCurrentSessionId(sessionId); // Store session ID for stop button
       setImportProgress({
         isImporting: true,
         currentFolder: '',
@@ -329,6 +357,7 @@ export default function Inbox() {
           if (data.error) {
             // Import failed
             console.error('Import failed:', data.error);
+            setCurrentSessionId(null);
             setImportProgress({
               isImporting: false,
               currentFolder: '',
@@ -361,6 +390,7 @@ export default function Inbox() {
 
             // Clear progress after showing final results
             setTimeout(() => {
+              setCurrentSessionId(null);
               setImportProgress({
                 isImporting: false,
                 currentFolder: '',
@@ -384,6 +414,7 @@ export default function Inbox() {
         // Only show error if import didn't complete successfully
         if (!wasCompleted) {
           console.error('Connection to import progress lost. Import may still be running in the background.');
+          setCurrentSessionId(null);
           setImportProgress({
             isImporting: false,
             currentFolder: '',
@@ -405,7 +436,6 @@ export default function Inbox() {
         imap_username: importData.imap_username,
         imap_password: importData.imap_password,
         folders: selectedFolderNames,
-        limit_per_folder: importData.limit_per_folder,
         session_id: sessionId
       });
 
@@ -416,6 +446,7 @@ export default function Inbox() {
       const errorMsg = error.response?.data?.error || error.message;
       console.error('Import failed:', errorMsg);
       setImportStep(1);
+      setCurrentSessionId(null);
       setImportProgress({
         isImporting: false,
         currentFolder: '',
@@ -426,6 +457,26 @@ export default function Inbox() {
         folderResults: [],
         logs: []
       });
+    }
+  };
+
+  const handleStopImport = async () => {
+    if (!currentSessionId) {
+      console.warn('No active import session');
+      return;
+    }
+
+    if (!confirm('Stop the import? Progress will be saved for messages already imported.')) {
+      return;
+    }
+
+    try {
+      console.log(`Stopping import session: ${currentSessionId}`);
+      const response = await messagesAPI.stopImport(currentSessionId);
+      console.log('Stop request sent:', response.data);
+    } catch (error) {
+      const errorMsg = error.response?.data?.message || error.message;
+      console.error('Failed to stop import:', errorMsg);
     }
   };
 
@@ -490,61 +541,57 @@ export default function Inbox() {
             onChange={handleSearch}
             style={styles.searchInputSidebar}
           />
-          <div style={styles.sidebarHeader}>
-            <label style={styles.selectAllLabel}>
-              <input
-                type="checkbox"
-                checked={filteredMessages.length > 0 && selectedMessageIds.size === filteredMessages.length}
-                onChange={toggleSelectAll}
-                style={styles.checkbox}
-              />
-              <span>Messages ({filteredMessages.length}{filteredMessages.length !== messages.length ? ` of ${messages.length}` : ''})</span>
-            </label>
-          </div>
-          {filteredMessages.length === 0 ? (
-            <p style={styles.empty}>{searchQuery ? 'No messages match your search' : 'No messages. Click Sync to fetch emails.'}</p>
-          ) : (
-            <ul style={styles.messageList}>
-              {filteredMessages.map(msg => (
-                <li
-                  key={msg.id}
-                  style={{
-                    ...styles.messageItem,
-                    ...(msg.is_read ? {} : styles.unread),
-                    ...(selectedMessage?.id === msg.id ? styles.selected : {})
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedMessageIds.has(msg.id)}
-                    onChange={(e) => {
-                      e.stopPropagation();
-                      toggleSelectMessage(msg.id);
+
+          {/* Folder List */}
+          <div style={styles.folderSection}>
+            <div style={styles.folderHeader}>Folders</div>
+            <ul style={styles.folderList}>
+              {folders.map(folder => {
+                const folderCount = folder === 'All'
+                  ? filteredMessages.length
+                  : filteredMessages.filter(msg => msg.folder === folder).length;
+                return (
+                  <li
+                    key={folder}
+                    style={{
+                      ...styles.folderItem,
+                      ...(selectedFolder === folder ? styles.folderItemActive : {})
                     }}
-                    style={styles.messageCheckbox}
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                  <div style={styles.messageContent} onClick={() => selectMessage(msg)}>
-                    <div style={styles.messageFrom}>{msg.from_address}</div>
-                    <div style={styles.messageSubject}>{msg.subject}</div>
-                    <div style={styles.messageDate}>
-                      {new Date(msg.received_date).toLocaleDateString()}
-                    </div>
-                  </div>
-                </li>
-              ))}
+                    onClick={() => {
+                      setSelectedFolder(folder);
+                      setCurrentPage(1);
+                      setSelectedMessage(null); // Clear selection when switching folders
+                    }}
+                  >
+                    <span style={styles.folderName}>
+                      {folder === 'All' ? '📁 All Messages' : `📂 ${folder}`}
+                    </span>
+                    <span style={styles.folderCount}>{folderCount}</span>
+                  </li>
+                );
+              })}
             </ul>
-          )}
+          </div>
         </aside>
 
         <main style={styles.content}>
           {selectedMessage ? (
-            <div>
+            /* Message Detail View */
+            <div style={{ padding: '2rem' }}>
               <div style={styles.messageViewHeader}>
+                <button
+                  style={{ ...styles.button, marginRight: '1rem' }}
+                  onClick={() => setSelectedMessage(null)}
+                >
+                  ← Back to List
+                </button>
                 <h2 style={{ margin: 0, flex: 1 }}>{selectedMessage.subject}</h2>
                 <button
                   style={{ ...styles.button, backgroundColor: '#dc3545' }}
-                  onClick={() => handleDeleteMessage(selectedMessage.id)}
+                  onClick={() => {
+                    handleDeleteMessage(selectedMessage.id);
+                    setSelectedMessage(null);
+                  }}
                 >
                   🗑️ Delete
                 </button>
@@ -567,8 +614,100 @@ export default function Inbox() {
               </div>
             </div>
           ) : (
-            <div style={styles.emptyMessage}>
-              <p>Select a message to read</p>
+            /* Message List View */
+            <div>
+              <div style={styles.messageListHeader}>
+                <div style={styles.messageListHeaderLeft}>
+                  <label style={styles.selectAllLabel}>
+                    <input
+                      type="checkbox"
+                      checked={paginatedMessages.length > 0 && selectedMessageIds.size === paginatedMessages.length && paginatedMessages.every(msg => selectedMessageIds.has(msg.id))}
+                      onChange={toggleSelectAll}
+                      style={styles.checkbox}
+                    />
+                    <span>
+                      {selectedMessageIds.size > 0 
+                        ? `${selectedMessageIds.size} selected` 
+                        : `${folderFilteredMessages.length} message${folderFilteredMessages.length !== 1 ? 's' : ''}`}
+                    </span>
+                  </label>
+                  {selectedMessageIds.size > 0 && (
+                    <button
+                      style={{ ...styles.button, backgroundColor: '#dc3545', marginLeft: '1rem' }}
+                      onClick={handleDeleteSelected}
+                    >
+                      🗑️ Delete ({selectedMessageIds.size})
+                    </button>
+                  )}
+                </div>
+                <div style={styles.messageListHeaderRight}>
+                  {totalPages > 1 && (
+                    <div style={styles.paginationInline}>
+                      <span style={styles.paginationInfo}>
+                        Page {currentPage} of {totalPages}
+                      </span>
+                      <button
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                        style={{
+                          ...styles.paginationButton,
+                          ...(currentPage === 1 ? styles.paginationButtonDisabled : {})
+                        }}
+                      >
+                        ←
+                      </button>
+                      <button
+                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                        disabled={currentPage === totalPages}
+                        style={{
+                          ...styles.paginationButton,
+                          ...(currentPage === totalPages ? styles.paginationButtonDisabled : {})
+                        }}
+                      >
+                        →
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {paginatedMessages.length === 0 ? (
+                <div style={styles.emptyMessage}>
+                  <p>{searchQuery ? 'No messages match your search' : 'No messages in this folder. Click Sync to fetch emails.'}</p>
+                </div>
+              ) : (
+                <ul style={styles.messageListMain}>
+                  {paginatedMessages.map(msg => (
+                    <li
+                      key={msg.id}
+                      style={{
+                        ...styles.messageItemMain,
+                        ...(msg.is_read ? {} : styles.unread)
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = msg.is_read ? 'white' : '#f0f8ff'}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedMessageIds.has(msg.id)}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          toggleSelectMessage(msg.id);
+                        }}
+                        style={styles.messageCheckbox}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <div style={styles.messageContentMain} onClick={() => selectMessage(msg)}>
+                        <div style={styles.messageFromMain}>{msg.from_address}</div>
+                        <div style={styles.messageSubjectMain}>{msg.subject}</div>
+                        <div style={styles.messageDateMain}>
+                          {new Date(msg.received_date).toLocaleDateString()}
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
         </main>
@@ -635,17 +774,6 @@ export default function Inbox() {
                       style={styles.input}
                     />
                   </div>
-                  <div style={styles.formGroup}>
-                    <label>Max Emails per Folder:</label>
-                    <input
-                      type="number"
-                      value={importData.limit_per_folder}
-                      onChange={(e) => setImportData({ ...importData, limit_per_folder: parseInt(e.target.value) })}
-                      min="1"
-                      max="1000"
-                      style={styles.input}
-                    />
-                  </div>
                   <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
                     <button
                       type="button"
@@ -667,7 +795,7 @@ export default function Inbox() {
               <>
                 <div style={styles.infoBox}>
                   <strong>📁 Found {availableFolders.length} folders</strong><br />
-                  Select the folders you want to import. Up to {importData.limit_per_folder} emails will be imported from each selected folder.
+                  Select the folders you want to import. All emails will be imported from each selected folder, processing in batches of 10 messages for better progress tracking.
                 </div>
                 <form onSubmit={handleImport}>
                   <div style={styles.folderList}>
@@ -822,6 +950,23 @@ export default function Inbox() {
                 </div>
               </div>
             )}
+
+            {/* Stop Button */}
+            <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
+              <button
+                onClick={handleStopImport}
+                style={{
+                  ...styles.button,
+                  backgroundColor: '#dc3545',
+                  color: 'white',
+                  padding: '0.75rem 2rem',
+                  fontSize: '1rem',
+                  fontWeight: 'bold'
+                }}
+              >
+                🛑 Stop Import
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -850,13 +995,78 @@ const styles = {
   },
   main: { display: 'flex', flex: 1, overflow: 'hidden' },
   sidebar: {
-    width: '350px',
+    width: '280px',
     borderRight: '1px solid #ddd',
     overflowY: 'auto',
     padding: '1rem',
     backgroundColor: '#f9f9f9'
   },
-  content: { flex: 1, padding: '2rem', overflowY: 'auto' },
+  content: { flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' },
+  messageListHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '1rem 2rem',
+    borderBottom: '2px solid #ddd',
+    backgroundColor: '#fff',
+    position: 'sticky',
+    top: 0,
+    zIndex: 10
+  },
+  messageListHeaderLeft: {
+    display: 'flex',
+    alignItems: 'center'
+  },
+  messageListHeaderRight: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '1rem'
+  },
+  paginationInline: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem'
+  },
+  messageListMain: {
+    listStyle: 'none',
+    padding: 0,
+    margin: 0,
+    flex: 1
+  },
+  messageItemMain: {
+    padding: '1rem 2rem',
+    borderBottom: '1px solid #eee',
+    cursor: 'pointer',
+    transition: 'background-color 0.2s',
+    display: 'flex',
+    alignItems: 'flex-start'
+  },
+  messageContentMain: {
+    flex: 1,
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '1rem'
+  },
+  messageFromMain: {
+    fontSize: '0.95rem',
+    color: '#333',
+    minWidth: '250px',
+    fontWeight: '500'
+  },
+  messageSubjectMain: {
+    fontSize: '1rem',
+    flex: 1,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap'
+  },
+  messageDateMain: {
+    fontSize: '0.85rem',
+    color: '#999',
+    minWidth: '120px',
+    textAlign: 'right'
+  },
   messageList: { listStyle: 'none', padding: 0, margin: 0 },
   messageItem: {
     padding: '0.75rem',
@@ -962,12 +1172,11 @@ const styles = {
     lineHeight: '1.6'
   },
   folderList: {
+    listStyle: 'none',
+    padding: 0,
+    margin: 0,
     maxHeight: '400px',
-    overflowY: 'auto',
-    border: '1px solid #ddd',
-    borderRadius: '4px',
-    padding: '1rem',
-    backgroundColor: '#f9f9f9'
+    overflowY: 'auto'
   },
   folderControls: {
     display: 'flex',
@@ -994,10 +1203,13 @@ const styles = {
   folderItem: {
     display: 'flex',
     alignItems: 'center',
-    padding: '0.5rem',
+    justifyContent: 'space-between',
+    padding: '0.75rem',
     cursor: 'pointer',
     borderRadius: '4px',
-    transition: 'background-color 0.2s'
+    transition: 'all 0.2s',
+    marginBottom: '0.25rem',
+    borderLeft: '4px solid transparent'
   },
   checkbox: {
     marginRight: '0.8rem',
@@ -1183,5 +1395,62 @@ const styles = {
     flex: 1,
     wordBreak: 'break-word',
     color: '#e9ecef'
+  },
+  folderSection: {
+    marginBottom: '1.5rem'
+  },
+  folderHeader: {
+    fontSize: '0.85rem',
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+    color: '#666',
+    marginBottom: '0.5rem',
+    letterSpacing: '0.5px'
+  },
+  folderItemActive: {
+    backgroundColor: '#e3f2fd',
+    fontWeight: 'bold',
+    borderLeft: '4px solid #2196f3'
+  },
+  folderName: {
+    flex: 1
+  },
+  folderCount: {
+    backgroundColor: '#007bff',
+    color: 'white',
+    padding: '0.2rem 0.6rem',
+    borderRadius: '12px',
+    fontSize: '0.8rem',
+    fontWeight: 'bold'
+  },
+  pagination: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '1rem',
+    borderTop: '2px solid #ddd',
+    marginTop: '0.5rem',
+    backgroundColor: '#f9f9f9'
+  },
+  paginationButton: {
+    backgroundColor: '#007bff',
+    color: 'white',
+    border: 'none',
+    padding: '0.5rem 1rem',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '0.9rem',
+    fontWeight: '500',
+    transition: 'background-color 0.2s'
+  },
+  paginationButtonDisabled: {
+    backgroundColor: '#ccc',
+    cursor: 'not-allowed',
+    opacity: 0.6
+  },
+  paginationInfo: {
+    fontSize: '0.9rem',
+    fontWeight: '500',
+    color: '#333'
   }
 };

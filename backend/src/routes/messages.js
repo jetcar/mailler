@@ -268,7 +268,7 @@ router.post('/import/multi', ensureAuthenticated, async (req, res, next) => {
         password: imap_password
       },
       folders,
-      limit_per_folder || 100,
+      10, // Process in batches of 10 messages
       session_id
     ).catch(error => {
       console.error('Background import failed:', error);
@@ -283,6 +283,31 @@ router.post('/import/multi', ensureAuthenticated, async (req, res, next) => {
         }
       });
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Stop an active import
+router.post('/import/stop/:sessionId', ensureAuthenticated, async (req, res, next) => {
+  try {
+    const { sessionId } = req.params;
+
+    console.log(`🛑 User ${req.user.email} requesting stop for session ${sessionId}`);
+
+    const stopped = receiverService.stopImport(sessionId);
+
+    if (stopped) {
+      res.json({
+        success: true,
+        message: 'Stop request sent. Import will stop after current batch.'
+      });
+    } else {
+      res.status(404).json({
+        success: false,
+        message: 'No active import found with this session ID'
+      });
+    }
   } catch (error) {
     next(error);
   }

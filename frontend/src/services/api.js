@@ -120,6 +120,7 @@ export const messagesAPI = {
   import: (data) => api.post('/api/messages/import', data),
   fetchFolders: (data) => api.post('/api/messages/import/folders', data),
   importMulti: (data) => api.post('/api/messages/import/multi', data),
+  stopImport: (sessionId) => api.post(`/api/messages/import/stop/${sessionId}`),
   update: (id, data) => api.patch(`/api/messages/${id}`, data),
   delete: (id) => api.delete(`/api/messages/${id}`)
 };
