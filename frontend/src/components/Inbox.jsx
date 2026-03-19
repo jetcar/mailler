@@ -1,14 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
+import { Outlet, useSearchParams, useNavigate } from 'react-router-dom';
 import { messagesAPI, accountsAPI, authAPI } from '../services/api';
+import { logger } from '../utils/logger';
 
 export default function Inbox() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [messages, setMessages] = useState([]);
   const [accounts, setAccounts] = useState([]);
-  const [selectedMessage, setSelectedMessage] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [showImportDialog, setShowImportDialog] = useState(false);
-  const [selectedMessageIds, setSelectedMessageIds] = useState(new Set());
+
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredMessages, setFilteredMessages] = useState([]);
   const [importStep, setImportStep] = useState(1); // 1: credentials, 2: folder selection
@@ -30,10 +32,12 @@ export default function Inbox() {
     folderResults: [],
     logs: []
   });
-  const [selectedFolder, setSelectedFolder] = useState('All');
-  const [currentPage, setCurrentPage] = useState(1);
+  const [selectedFolder, setSelectedFolder] = useState(searchParams.get('folder') || 'All');
+  const [currentPage, setCurrentPage] = useState(parseInt(searchParams.get('page')) || 1);
   const [itemsPerPage] = useState(50);
   const [currentSessionId, setCurrentSessionId] = useState(null);
+  const [isImportActionPending, setIsImportActionPending] = useState(false);
+  const logsContainerRef = useRef(null);
 
   useEffect(() => {
     init();
@@ -42,9 +46,8 @@ export default function Inbox() {
   // Auto-scroll logs to bottom when new logs arrive
   useEffect(() => {
     if (importProgress.logs.length > 0) {
-      const logsContainer = document.querySelector('[data-logs-container]');
-      if (logsContainer) {
-        logsContainer.scrollTop = logsContainer.scrollHeight;
+      if (logsContainerRef.current) {
+        logsContainerRef.current.scrollTop = logsContainerRef.current.scrollHeight;
       }
     }
   }, [importProgress.logs]);
@@ -62,9 +65,9 @@ export default function Inbox() {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-      console.log(`✅ Debug file saved: ${filename}`);
+      logger.info('Debug file saved', { filename });
     } catch (error) {
-      console.error('Failed to save debug file:', error);
+      logger.error('Failed to save debug file', { error });
     }
   };
 
@@ -76,7 +79,7 @@ export default function Inbox() {
       try {
         const authRes = await authAPI.getMe();
         if (!authRes.data.authenticated) {
-          window.location.href = '/';
+          navigate('/', { replace: true });
           return;
         }
         setUser(authRes.data.user);
@@ -98,20 +101,32 @@ export default function Inbox() {
 
         if ((is503 || isNetworkError) && attempt < maxRetries) {
           const delay = initialDelay * Math.pow(2, attempt - 1); // Exponential backoff
-          console.log(`Backend not ready (attempt ${attempt}/${maxRetries}), retrying in ${delay}ms...`);
+          logger.warn(`Backend not ready (attempt ${attempt}/${maxRetries}), retrying in ${delay}ms`);
           await new Promise(resolve => setTimeout(resolve, delay));
         } else if (attempt === maxRetries) {
-          console.error('Failed to load inbox after maximum retries:', error);
-          console.error('Unable to connect to server. Please refresh the page to try again.');
+          logger.error('Failed to load inbox after maximum retries', { error });
+          logger.error('Unable to connect to server. Please refresh the page to try again.');
         } else {
-          console.error('Failed to load inbox:', error);
+          logger.error('Failed to load inbox', { error });
           break;
         }
       }
     }
-
-    setLoading(false);
   };
+
+  // Sync state with URL params
+  useEffect(() => {
+    const urlFolder = searchParams.get('folder') || 'All';
+    const urlPage = parseInt(searchParams.get('page')) || 1;
+
+    if (urlFolder !== selectedFolder) {
+      setSelectedFolder(urlFolder);
+    }
+
+    if (urlPage !== currentPage) {
+      setCurrentPage(urlPage);
+    }
+  }, [searchParams]);
 
   // Filter messages based on search query
   useEffect(() => {
@@ -127,124 +142,46 @@ export default function Inbox() {
       msg.body_text?.toLowerCase().includes(query)
     );
     setFilteredMessages(filtered);
-    setCurrentPage(1); // Reset to first page on search
   }, [searchQuery, messages]);
 
   // Get unique folders from messages
   const folders = ['All', ...new Set(messages.map(msg => msg.folder).filter(Boolean))];
 
-  // Filter messages by selected folder and search
-  const folderFilteredMessages = selectedFolder === 'All'
-    ? filteredMessages
-    : filteredMessages.filter(msg => msg.folder === selectedFolder);
-
-  // Pagination
-  const totalPages = Math.ceil(folderFilteredMessages.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedMessages = folderFilteredMessages.slice(startIndex, endIndex);
-
   const handleSearch = (e) => {
     setSearchQuery(e.target.value);
   };
 
-  const toggleSelectMessage = (messageId) => {
-    const newSelected = new Set(selectedMessageIds);
-    if (newSelected.has(messageId)) {
-      newSelected.delete(messageId);
-    } else {
-      newSelected.add(messageId);
-    }
-    setSelectedMessageIds(newSelected);
-  };
-
-  const toggleSelectAll = () => {
-    const currentPageIds = paginatedMessages.map(m => m.id);
-    const allCurrentSelected = currentPageIds.every(id => selectedMessageIds.has(id));
-
-    if (allCurrentSelected) {
-      // Deselect all on current page
-      setSelectedMessageIds(prev => {
-        const newSet = new Set(prev);
-        currentPageIds.forEach(id => newSet.delete(id));
-        return newSet;
-      });
-    } else {
-      // Select all on current page
-      setSelectedMessageIds(prev => new Set([...prev, ...currentPageIds]));
-    }
-  };
-
-  const handleDeleteSelected = async () => {
-    if (selectedMessageIds.size === 0) {
-      console.warn('No messages selected for deletion');
-      return;
-    }
-
-    if (!confirm(`Delete ${selectedMessageIds.size} selected message(s)?`)) {
-      return;
-    }
-
+  const handleDeleteSelected = async (ids) => {
     try {
-      setLoading(true);
-      const deletePromises = Array.from(selectedMessageIds).map(id =>
-        messagesAPI.delete(id)
-      );
-      await Promise.all(deletePromises);
-
-      const messagesRes = await messagesAPI.getAll();
-      setMessages(messagesRes.data.messages);
-      setFilteredMessages(messagesRes.data.messages);
-      setSelectedMessageIds(new Set());
-      setSelectedMessage(null);
+      await Promise.all(ids.map(id => messagesAPI.delete(id)));
+      const res = await messagesAPI.getAll();
+      setMessages(res.data.messages);
+      setFilteredMessages(res.data.messages);
     } catch (error) {
-      console.error('Failed to delete messages:', error.response?.data?.error || error.message);
-    } finally {
-      setLoading(false);
+      logger.error('Failed to delete messages', { error: error.response?.data?.error || error.message });
     }
   };
 
   const handleDeleteMessage = async (messageId) => {
-    if (!confirm('Delete this message?')) {
-      return;
-    }
-
     try {
-      setLoading(true);
       await messagesAPI.delete(messageId);
-
-      const messagesRes = await messagesAPI.getAll();
-      setMessages(messagesRes.data.messages);
-      setFilteredMessages(messagesRes.data.messages);
-      setSelectedMessage(null);
-      setSelectedMessageIds(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(messageId);
-        return newSet;
-      });
+      const res = await messagesAPI.getAll();
+      setMessages(res.data.messages);
+      setFilteredMessages(res.data.messages);
     } catch (error) {
-      console.error('Failed to delete message:', error.response?.data?.error || error.message);
-    } finally {
-      setLoading(false);
+      logger.error('Failed to delete message', { error: error.response?.data?.error || error.message });
     }
   };
 
   const handleSync = async () => {
-    if (accounts.length === 0) {
-      console.warn('No email account available for sync');
-      return;
-    }
-
+    if (accounts.length === 0) return;
     try {
-      setLoading(true);
       await messagesAPI.sync(accounts[0].id);
-      const messagesRes = await messagesAPI.getAll();
-      setMessages(messagesRes.data.messages);
-      setFilteredMessages(messagesRes.data.messages);
+      const res = await messagesAPI.getAll();
+      setMessages(res.data.messages);
+      setFilteredMessages(res.data.messages);
     } catch (error) {
-      console.error('Sync failed:', error);
-    } finally {
-      setLoading(false);
+      logger.error('Sync failed', { error });
     }
   };
 
@@ -252,13 +189,12 @@ export default function Inbox() {
     e.preventDefault();
 
     if (!importData.imap_username || !importData.imap_password) {
-      console.warn('IMAP credentials required for folder fetch');
+      logger.warn('IMAP credentials required for folder fetch');
       return;
     }
 
     try {
-      setLoading(true);
-
+      setIsImportActionPending(true);
       const res = await messagesAPI.fetchFolders({
         imap_host: importData.imap_host,
         imap_port: importData.imap_port,
@@ -283,7 +219,7 @@ export default function Inbox() {
       const errorMsg = error.response?.data?.error || error.message;
 
       if (errorMsg.includes('Application-specific password')) {
-        console.error(
+        logger.error(
           '⚠️ Gmail requires an App Password for IMAP access.\n\n' +
           'Steps to fix:\n' +
           '1. Go to: https://myaccount.google.com/apppasswords\n' +
@@ -292,10 +228,10 @@ export default function Inbox() {
           'Note: You need 2-Factor Authentication enabled first.'
         );
       } else {
-        console.error('Failed to fetch folders:', errorMsg);
+        logger.error('Failed to fetch folders', { error: errorMsg });
       }
     } finally {
-      setLoading(false);
+      setIsImportActionPending(false);
     }
   };
 
@@ -303,14 +239,14 @@ export default function Inbox() {
     e.preventDefault();
 
     if (accounts.length === 0) {
-      console.warn('No email account available for import');
+      logger.warn('No email account available for import');
       return;
     }
 
     const selectedFolderNames = Object.keys(selectedFolders).filter(f => selectedFolders[f]);
 
     if (selectedFolderNames.length === 0) {
-      console.warn('No folders selected for import');
+      logger.warn('No folders selected for import');
       return;
     }
 
@@ -319,6 +255,7 @@ export default function Inbox() {
     let importCompleted = false;
 
     try {
+      setIsImportActionPending(true);
       setShowImportDialog(false);
       setCurrentSessionId(sessionId); // Store session ID for stop button
       setImportProgress({
@@ -339,7 +276,7 @@ export default function Inbox() {
         const data = JSON.parse(event.data);
 
         if (data.type === 'connected') {
-          console.log('SSE connected:', data.sessionId);
+          logger.info('Import progress stream connected', { sessionId: data.sessionId });
         } else if (data.type === 'log') {
           // Add log to the list
           setImportProgress(prev => ({
@@ -348,7 +285,7 @@ export default function Inbox() {
           }));
         } else if (data.type === 'complete') {
           // Import finished - update final results
-          console.log('Import completed via SSE:', data);
+          logger.info('Import completed via SSE', { sessionId: data.sessionId });
           importCompleted = true;
 
           // Close SSE connection
@@ -356,7 +293,7 @@ export default function Inbox() {
 
           if (data.error) {
             // Import failed
-            console.error('Import failed:', data.error);
+            logger.error('Import failed', { error: data.error });
             setCurrentSessionId(null);
             setImportProgress({
               isImporting: false,
@@ -408,12 +345,15 @@ export default function Inbox() {
 
       eventSource.onerror = (error) => {
         const wasCompleted = importCompleted;
-        console.log(wasCompleted ? 'SSE connection closed normally after import completion' : 'SSE connection error or unexpected closure:', error);
+        logger.info(
+          wasCompleted ? 'SSE connection closed after import completion' : 'SSE connection closed unexpectedly',
+          wasCompleted ? undefined : { error }
+        );
         eventSource?.close();
 
         // Only show error if import didn't complete successfully
         if (!wasCompleted) {
-          console.error('Connection to import progress lost. Import may still be running in the background.');
+          logger.error('Connection to import progress lost. Import may still be running in the background.');
           setCurrentSessionId(null);
           setImportProgress({
             isImporting: false,
@@ -439,12 +379,13 @@ export default function Inbox() {
         session_id: sessionId
       });
 
-      console.log('Import started, waiting for completion via SSE...');
+      logger.info('Import started, waiting for SSE completion', { sessionId });
+      setIsImportActionPending(false);
 
     } catch (error) {
       eventSource?.close();
       const errorMsg = error.response?.data?.error || error.message;
-      console.error('Import failed:', errorMsg);
+      logger.error('Import failed', { error: errorMsg });
       setImportStep(1);
       setCurrentSessionId(null);
       setImportProgress({
@@ -457,12 +398,13 @@ export default function Inbox() {
         folderResults: [],
         logs: []
       });
+      setIsImportActionPending(false);
     }
   };
 
   const handleStopImport = async () => {
     if (!currentSessionId) {
-      console.warn('No active import session');
+      logger.warn('No active import session');
       return;
     }
 
@@ -471,63 +413,52 @@ export default function Inbox() {
     }
 
     try {
-      console.log(`Stopping import session: ${currentSessionId}`);
       const response = await messagesAPI.stopImport(currentSessionId);
-      console.log('Stop request sent:', response.data);
+      logger.info('Stop request sent for import session', { sessionId: currentSessionId, response: response.data });
     } catch (error) {
       const errorMsg = error.response?.data?.message || error.message;
-      console.error('Failed to stop import:', errorMsg);
+      logger.error('Failed to stop import', { error: errorMsg });
     }
   };
 
   const handleLogout = async () => {
     try {
       await authAPI.logout();
-      window.location.href = '/';
+      navigate('/', { replace: true });
     } catch (error) {
-      console.error('Logout failed:', error);
+      logger.error('Logout failed', { error });
     }
   };
 
-  const selectMessage = async (msg) => {
-    try {
-      const res = await messagesAPI.get(msg.id);
-      setSelectedMessage(res.data.message);
-
-      // Mark as read
-      if (!msg.is_read) {
-        await messagesAPI.update(msg.id, { is_read: true });
-        setMessages(messages.map(m =>
-          m.id === msg.id ? { ...m, is_read: true } : m
-        ));
-      }
-    } catch (error) {
-      console.error('Failed to load message:', error);
-    }
+  const handleMarkRead = (messageId) => {
+    messagesAPI.update(messageId, { is_read: true }).catch(() => { });
+    setMessages(prev => prev.map(m => m.id === messageId ? { ...m, is_read: true } : m));
+    setFilteredMessages(prev => prev.map(m => m.id === messageId ? { ...m, is_read: true } : m));
   };
 
-  if (loading) {
-    return <div style={styles.loading}>Loading...</div>;
-  }
+  const outletContext = {
+    messages,
+    filteredMessages,
+    accounts,
+    selectedFolder,
+    currentPage,
+    itemsPerPage,
+    searchQuery,
+    onDeleteSelected: handleDeleteSelected,
+    onDeleteMessage: handleDeleteMessage,
+    onMarkRead: handleMarkRead,
+  };
 
   return (
     <div style={styles.container}>
       <header style={styles.header}>
         <h1>📧 Mailler</h1>
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-          {selectedMessageIds.size > 0 && (
-            <button
-              style={{ ...styles.button, backgroundColor: '#dc3545' }}
-              onClick={handleDeleteSelected}
-            >
-              🗑️ Delete ({selectedMessageIds.size})
-            </button>
-          )}
           <span style={{ marginRight: '0.5rem' }}>{user?.email}</span>
           <button style={styles.button} onClick={handleSync}>Sync</button>
           <button style={styles.button} onClick={() => setShowImportDialog(true)}>Import from Gmail</button>
-          <button style={styles.button} onClick={() => window.location.href = '/compose'}>Compose</button>
-          <button style={styles.button} onClick={() => window.location.href = '/settings'}>Settings</button>
+          <button style={styles.button} onClick={() => navigate('/compose')}>Compose</button>
+          <button style={styles.button} onClick={() => navigate('/settings')}>Settings</button>
           <button style={styles.button} onClick={handleLogout}>Logout</button>
         </div>
       </header>
@@ -558,9 +489,9 @@ export default function Inbox() {
                       ...(selectedFolder === folder ? styles.folderItemActive : {})
                     }}
                     onClick={() => {
-                      setSelectedFolder(folder);
-                      setCurrentPage(1);
-                      setSelectedMessage(null); // Clear selection when switching folders
+                      const params = new URLSearchParams();
+                      if (folder !== 'All') params.set('folder', folder);
+                      setSearchParams(params);
                     }}
                   >
                     <span style={styles.folderName}>
@@ -575,141 +506,7 @@ export default function Inbox() {
         </aside>
 
         <main style={styles.content}>
-          {selectedMessage ? (
-            /* Message Detail View */
-            <div style={{ padding: '2rem' }}>
-              <div style={styles.messageViewHeader}>
-                <button
-                  style={{ ...styles.button, marginRight: '1rem' }}
-                  onClick={() => setSelectedMessage(null)}
-                >
-                  ← Back to List
-                </button>
-                <h2 style={{ margin: 0, flex: 1 }}>{selectedMessage.subject}</h2>
-                <button
-                  style={{ ...styles.button, backgroundColor: '#dc3545' }}
-                  onClick={() => {
-                    handleDeleteMessage(selectedMessage.id);
-                    setSelectedMessage(null);
-                  }}
-                >
-                  🗑️ Delete
-                </button>
-              </div>
-              <div style={styles.messageHeader}>
-                <div><strong>From:</strong> {selectedMessage.from_address}</div>
-                <div><strong>To:</strong> {selectedMessage.to_addresses}</div>
-                {selectedMessage.cc_addresses && (
-                  <div><strong>CC:</strong> {selectedMessage.cc_addresses}</div>
-                )}
-                <div><strong>Date:</strong> {new Date(selectedMessage.received_date).toLocaleString()}</div>
-              </div>
-              <hr />
-              <div style={styles.messageBody}>
-                {selectedMessage.body_html ? (
-                  <div dangerouslySetInnerHTML={{ __html: selectedMessage.body_html }} />
-                ) : (
-                  <pre style={styles.messageText}>{selectedMessage.body_text}</pre>
-                )}
-              </div>
-            </div>
-          ) : (
-            /* Message List View */
-            <div>
-              <div style={styles.messageListHeader}>
-                <div style={styles.messageListHeaderLeft}>
-                  <label style={styles.selectAllLabel}>
-                    <input
-                      type="checkbox"
-                      checked={paginatedMessages.length > 0 && selectedMessageIds.size === paginatedMessages.length && paginatedMessages.every(msg => selectedMessageIds.has(msg.id))}
-                      onChange={toggleSelectAll}
-                      style={styles.checkbox}
-                    />
-                    <span>
-                      {selectedMessageIds.size > 0
-                        ? `${selectedMessageIds.size} selected`
-                        : `${folderFilteredMessages.length} message${folderFilteredMessages.length !== 1 ? 's' : ''}`}
-                    </span>
-                  </label>
-                  {selectedMessageIds.size > 0 && (
-                    <button
-                      style={{ ...styles.button, backgroundColor: '#dc3545', marginLeft: '1rem' }}
-                      onClick={handleDeleteSelected}
-                    >
-                      🗑️ Delete ({selectedMessageIds.size})
-                    </button>
-                  )}
-                </div>
-                <div style={styles.messageListHeaderRight}>
-                  {totalPages > 1 && (
-                    <div style={styles.paginationInline}>
-                      <span style={styles.paginationInfo}>
-                        Page {currentPage} of {totalPages}
-                      </span>
-                      <button
-                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                        disabled={currentPage === 1}
-                        style={{
-                          ...styles.paginationButton,
-                          ...(currentPage === 1 ? styles.paginationButtonDisabled : {})
-                        }}
-                      >
-                        ←
-                      </button>
-                      <button
-                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                        disabled={currentPage === totalPages}
-                        style={{
-                          ...styles.paginationButton,
-                          ...(currentPage === totalPages ? styles.paginationButtonDisabled : {})
-                        }}
-                      >
-                        →
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {paginatedMessages.length === 0 ? (
-                <div style={styles.emptyMessage}>
-                  <p>{searchQuery ? 'No messages match your search' : 'No messages in this folder. Click Sync to fetch emails.'}</p>
-                </div>
-              ) : (
-                <ul style={styles.messageListMain}>
-                  {paginatedMessages.map(msg => (
-                    <li
-                      key={msg.id}
-                      style={{
-                        ...styles.messageItemMain,
-                        ...(msg.is_read ? {} : styles.unread)
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
-                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = msg.is_read ? 'white' : '#f0f8ff'}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedMessageIds.has(msg.id)}
-                        onChange={(e) => {
-                          e.stopPropagation();
-                          toggleSelectMessage(msg.id);
-                        }}
-                        style={styles.messageCheckbox}
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                      <div style={styles.messageContentMain} onClick={() => selectMessage(msg)}>
-                        <div style={styles.messageFromMain}>{msg.from_address}</div>
-                        <div style={styles.messageSubjectMain}>{msg.subject}</div>
-                        <div style={styles.messageDateMain}>
-                          {new Date(msg.received_date).toLocaleDateString()}
-                        </div>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
+          <Outlet context={outletContext} />
         </main>
       </div>
 
@@ -785,8 +582,8 @@ export default function Inbox() {
                     >
                       Cancel
                     </button>
-                    <button type="submit" style={{ ...styles.button, backgroundColor: '#667eea' }} disabled={loading}>
-                      {loading ? 'Connecting...' : 'Next: Select Folders →'}
+                    <button type="submit" style={{ ...styles.button, backgroundColor: '#667eea' }} disabled={isImportActionPending}>
+                      {isImportActionPending ? 'Connecting...' : 'Next: Select Folders →'}
                     </button>
                   </div>
                 </form>
@@ -857,9 +654,9 @@ export default function Inbox() {
                     <button
                       type="submit"
                       style={{ ...styles.button, backgroundColor: '#28a745' }}
-                      disabled={loading || Object.values(selectedFolders).filter(Boolean).length === 0}
+                      disabled={isImportActionPending || Object.values(selectedFolders).filter(Boolean).length === 0}
                     >
-                      {loading ? 'Importing...' : `Import ${Object.values(selectedFolders).filter(Boolean).length} Folders`}
+                      {isImportActionPending ? 'Importing...' : `Import ${Object.values(selectedFolders).filter(Boolean).length} Folders`}
                     </button>
                   </div>
                 </form>
@@ -908,7 +705,7 @@ export default function Inbox() {
             {importProgress.logs.length > 0 && (
               <div style={styles.logsSection}>
                 <h3 style={{ fontSize: '0.9rem', margin: '0 0 0.5rem 0', color: '#666' }}>Import Logs:</h3>
-                <div style={styles.logsContainer} data-logs-container>
+                <div style={styles.logsContainer} ref={logsContainerRef}>
                   {importProgress.logs.slice(-20).map((log, index) => (
                     <div key={index} style={styles.logEntry}>
                       <span style={styles.logTimestamp}>
@@ -1052,20 +849,23 @@ const styles = {
     fontSize: '0.95rem',
     color: '#333',
     minWidth: '250px',
-    fontWeight: '500'
+    fontWeight: '500',
+    pointerEvents: 'none'
   },
   messageSubjectMain: {
     fontSize: '1rem',
     flex: 1,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap'
+    whiteSpace: 'nowrap',
+    pointerEvents: 'none'
   },
   messageDateMain: {
     fontSize: '0.85rem',
     color: '#999',
     minWidth: '120px',
-    textAlign: 'right'
+    textAlign: 'right',
+    pointerEvents: 'none'
   },
   messageList: { listStyle: 'none', padding: 0, margin: 0 },
   messageItem: {
@@ -1174,9 +974,7 @@ const styles = {
   folderList: {
     listStyle: 'none',
     padding: 0,
-    margin: 0,
-    maxHeight: '400px',
-    overflowY: 'auto'
+    margin: 0
   },
   folderControls: {
     display: 'flex',

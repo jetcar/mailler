@@ -1,19 +1,14 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { accountsAPI } from '../services/api';
+import { logger } from '../utils/logger';
 
 export default function Settings() {
+  const navigate = useNavigate();
   const [accounts, setAccounts] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
     email_address: '',
-    imap_host: '',
-    imap_port: 993,
-    imap_username: '',
-    imap_password: '',
-    smtp_host: '',
-    smtp_port: 587,
-    smtp_username: '',
-    smtp_password: '',
     is_default: false
   });
 
@@ -26,7 +21,7 @@ export default function Settings() {
       const res = await accountsAPI.getAll();
       setAccounts(res.data.accounts);
     } catch (error) {
-      console.error('Failed to load accounts:', error);
+      logger.error('Failed to load accounts', { error });
     }
   };
 
@@ -39,23 +34,14 @@ export default function Settings() {
     e.preventDefault();
     try {
       await accountsAPI.create(formData);
-      console.log('Account added successfully');
       setShowForm(false);
       setFormData({
         email_address: '',
-        imap_host: '',
-        imap_port: 993,
-        imap_username: '',
-        imap_password: '',
-        smtp_host: '',
-        smtp_port: 587,
-        smtp_username: '',
-        smtp_password: '',
         is_default: false
       });
       loadAccounts();
     } catch (error) {
-      console.error('Failed to add account:', error.message);
+      logger.error('Failed to add account', { error: error.message });
     }
   };
 
@@ -64,10 +50,9 @@ export default function Settings() {
 
     try {
       await accountsAPI.delete(id);
-      console.log('Account deleted successfully');
       loadAccounts();
     } catch (error) {
-      console.error('Failed to delete account:', error.message);
+      logger.error('Failed to delete account', { error: error.message });
     }
   };
 
@@ -75,7 +60,7 @@ export default function Settings() {
     <div style={styles.container}>
       <header style={styles.header}>
         <h1>⚙️ Settings</h1>
-        <button style={styles.button} onClick={() => window.location.href = '/inbox'}>
+        <button style={styles.button} onClick={() => navigate('/inbox')}>
           Back to Inbox
         </button>
       </header>
@@ -92,6 +77,9 @@ export default function Settings() {
           {showForm && (
             <form onSubmit={handleSubmit} style={styles.form}>
               <h3>Add Email Account</h3>
+              <p style={styles.helpText}>
+                Accounts now store only the local email address and default flag. Import credentials are entered only when you run a Gmail import.
+              </p>
 
               <div style={styles.formRow}>
                 <div style={styles.field}>
@@ -100,110 +88,6 @@ export default function Settings() {
                     type="email"
                     name="email_address"
                     value={formData.email_address}
-                    onChange={handleChange}
-                    style={styles.input}
-                    required
-                  />
-                </div>
-              </div>
-
-              <h4>IMAP Settings (Receiving)</h4>
-              <div style={styles.formRow}>
-                <div style={styles.field}>
-                  <label style={styles.label}>IMAP Host *</label>
-                  <input
-                    type="text"
-                    name="imap_host"
-                    value={formData.imap_host}
-                    onChange={handleChange}
-                    style={styles.input}
-                    placeholder="imap.gmail.com"
-                    required
-                  />
-                </div>
-                <div style={styles.fieldSmall}>
-                  <label style={styles.label}>Port</label>
-                  <input
-                    type="number"
-                    name="imap_port"
-                    value={formData.imap_port}
-                    onChange={handleChange}
-                    style={styles.input}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div style={styles.formRow}>
-                <div style={styles.field}>
-                  <label style={styles.label}>IMAP Username *</label>
-                  <input
-                    type="text"
-                    name="imap_username"
-                    value={formData.imap_username}
-                    onChange={handleChange}
-                    style={styles.input}
-                    required
-                  />
-                </div>
-                <div style={styles.field}>
-                  <label style={styles.label}>IMAP Password *</label>
-                  <input
-                    type="password"
-                    name="imap_password"
-                    value={formData.imap_password}
-                    onChange={handleChange}
-                    style={styles.input}
-                    required
-                  />
-                </div>
-              </div>
-
-              <h4>SMTP Settings (Sending)</h4>
-              <div style={styles.formRow}>
-                <div style={styles.field}>
-                  <label style={styles.label}>SMTP Host *</label>
-                  <input
-                    type="text"
-                    name="smtp_host"
-                    value={formData.smtp_host}
-                    onChange={handleChange}
-                    style={styles.input}
-                    placeholder="smtp.gmail.com"
-                    required
-                  />
-                </div>
-                <div style={styles.fieldSmall}>
-                  <label style={styles.label}>Port</label>
-                  <input
-                    type="number"
-                    name="smtp_port"
-                    value={formData.smtp_port}
-                    onChange={handleChange}
-                    style={styles.input}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div style={styles.formRow}>
-                <div style={styles.field}>
-                  <label style={styles.label}>SMTP Username *</label>
-                  <input
-                    type="text"
-                    name="smtp_username"
-                    value={formData.smtp_username}
-                    onChange={handleChange}
-                    style={styles.input}
-                    required
-                  />
-                </div>
-                <div style={styles.field}>
-                  <label style={styles.label}>SMTP Password *</label>
-                  <input
-                    type="password"
-                    name="smtp_password"
-                    value={formData.smtp_password}
                     onChange={handleChange}
                     style={styles.input}
                     required
@@ -239,10 +123,7 @@ export default function Settings() {
                   <div style={styles.accountInfo}>
                     <h3>{account.email_address}</h3>
                     {account.is_default && <span style={styles.badge}>Default</span>}
-                    <p style={styles.accountDetails}>
-                      IMAP: {account.imap_host}:{account.imap_port}<br />
-                      SMTP: {account.smtp_host}:{account.smtp_port}
-                    </p>
+                    <p style={styles.accountDetails}>Local account used for sending and organizing imported mail.</p>
                   </div>
                   <button
                     style={styles.deleteButton}
@@ -304,14 +185,16 @@ const styles = {
     marginBottom: '2rem',
     boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
   },
+  helpText: {
+    margin: '0 0 1.5rem 0',
+    color: '#666',
+    lineHeight: '1.5'
+  },
   formRow: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: '1rem',
+    display: 'block',
     marginBottom: '1rem'
   },
   field: { flex: 1 },
-  fieldSmall: { flex: '0 0 120px' },
   label: {
     display: 'block',
     marginBottom: '0.5rem',

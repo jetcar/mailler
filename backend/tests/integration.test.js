@@ -22,7 +22,7 @@ describe('Email Integration Tests', () => {
   describe('User Authentication', () => {
     test('GET /auth/me returns 401 when not authenticated', async () => {
       const response = await request(app).get('/auth/me');
-      expect(response.status).toBe(200);
+      expect(response.status).toBe(401);
       expect(response.body.authenticated).toBe(false);
     });
   });
@@ -48,51 +48,27 @@ describe('Email Integration Tests', () => {
       }
     });
 
-    test('Create email account with encrypted credentials', async () => {
+    test('Create email account with supported fields', async () => {
       testAccount = await EmailAccount.create({
         user_id: testUser.id,
         email_address: 'test@example.com',
-        imap_host: 'imap.example.com',
-        imap_port: 993,
-        imap_username: 'test',
-        imap_password: 'plain-password',
-        smtp_host: 'smtp.example.com',
-        smtp_port: 587,
-        smtp_username: 'test',
-        smtp_password: 'plain-password'
+        is_default: true
       });
 
-      // Verify passwords are encrypted in database
-      expect(testAccount.imap_password).not.toBe('plain-password');
-      expect(testAccount.smtp_password).not.toBe('plain-password');
-      expect(testAccount.imap_password).toContain(':');
-      expect(testAccount.smtp_password).toContain(':');
-
-      // Verify decryption works
-      expect(testAccount.getDecryptedImapPassword()).toBe('plain-password');
-      expect(testAccount.getDecryptedSmtpPassword()).toBe('plain-password');
+      expect(testAccount.email_address).toBe('test@example.com');
+      expect(testAccount.is_default).toBe(true);
     });
 
-    test('Update email account re-encrypts passwords', async () => {
+    test('Update email account changes supported fields', async () => {
       testAccount = await EmailAccount.create({
         user_id: testUser.id,
         email_address: 'test@example.com',
-        imap_host: 'imap.example.com',
-        imap_port: 993,
-        imap_username: 'test',
-        imap_password: 'password1',
-        smtp_host: 'smtp.example.com',
-        smtp_port: 587,
-        smtp_username: 'test',
-        smtp_password: 'password1'
+        is_default: false
       });
 
-      const oldEncrypted = testAccount.imap_password;
+      await testAccount.update({ is_default: true });
 
-      await testAccount.update({ imap_password: 'password2' });
-
-      expect(testAccount.imap_password).not.toBe(oldEncrypted);
-      expect(testAccount.getDecryptedImapPassword()).toBe('password2');
+      expect(testAccount.is_default).toBe(true);
     });
   });
 
@@ -106,15 +82,7 @@ describe('Email Integration Tests', () => {
 
       testAccount = await EmailAccount.create({
         user_id: testUser.id,
-        email_address: 'test@example.com',
-        imap_host: 'imap.example.com',
-        imap_port: 993,
-        imap_username: 'test',
-        imap_password: 'password',
-        smtp_host: 'smtp.example.com',
-        smtp_port: 587,
-        smtp_username: 'test',
-        smtp_password: 'password'
+        email_address: 'test@example.com'
       });
     });
 
@@ -186,10 +154,10 @@ describe('Encryption Service', () => {
   test('Encrypt and decrypt text correctly', () => {
     const original = 'my-secret-password';
     const encrypted = encryptionService.encrypt(original);
-    
+
     expect(encrypted).not.toBe(original);
     expect(encrypted).toContain(':');
-    
+
     const decrypted = encryptionService.decrypt(encrypted);
     expect(decrypted).toBe(original);
   });
@@ -203,7 +171,7 @@ describe('Encryption Service', () => {
     const text = 'password';
     const encrypted1 = encryptionService.encrypt(text);
     const encrypted2 = encryptionService.encrypt(text);
-    
+
     expect(encrypted1).not.toBe(encrypted2);
     expect(encryptionService.decrypt(encrypted1)).toBe(text);
     expect(encryptionService.decrypt(encrypted2)).toBe(text);

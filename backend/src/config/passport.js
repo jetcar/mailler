@@ -4,9 +4,11 @@ const { Issuer, generators, custom } = require('openid-client');
 const { User, EmailAccount } = require('../models');
 const http = require('http');
 const https = require('https');
+const { logger } = require('../middleware/errorHandler');
 
 let client = null;
 let issuer = null;
+const allowInsecureOidcTls = process.env.ALLOW_INSECURE_OIDC_TLS === 'true';
 
 // Custom HTTP options for development (accept self-signed certificates)
 const httpOptions = {
@@ -16,7 +18,7 @@ const httpOptions = {
       return {
         ...options,
         agent: new https.Agent({
-          rejectUnauthorized: process.env.NODE_ENV === 'production' ? true : false
+          rejectUnauthorized: !allowInsecureOidcTls
         })
       };
     } else {
@@ -32,8 +34,8 @@ const httpOptions = {
 async function initializeOIDC() {
   if (!client) {
     try {
-      // Configure custom HTTP client for openid-client to accept self-signed certs in dev
-      if (process.env.NODE_ENV !== 'production') {
+      // Configure custom HTTP client for openid-client only when insecure TLS is explicitly allowed
+      if (allowInsecureOidcTls) {
         Issuer[custom.http_options] = (url, options) => {
           const parsedUrl = new URL(url);
           if (parsedUrl.protocol === 'https:') {
@@ -51,10 +53,12 @@ async function initializeOIDC() {
       // Discover OIDC configuration from /.well-known/openid-configuration
       issuer = await Issuer.discover(process.env.OIDC_ISSUER);
 
-      console.log('Discovered OIDC issuer:', issuer.metadata.issuer);
-      console.log('Authorization endpoint:', issuer.metadata.authorization_endpoint);
-      console.log('Token endpoint:', issuer.metadata.token_endpoint);
-      console.log('JWKS URI:', issuer.metadata.jwks_uri);
+      logger.info('Discovered OIDC issuer', {
+        issuer: issuer.metadata.issuer,
+        authorizationEndpoint: issuer.metadata.authorization_endpoint,
+        tokenEndpoint: issuer.metadata.token_endpoint,
+        jwksUri: issuer.metadata.jwks_uri
+      });
 
       // Create client with proper configuration
       client = new issuer.Client({
@@ -66,7 +70,7 @@ async function initializeOIDC() {
       });
 
       // Apply custom HTTP options to client as well
-      if (process.env.NODE_ENV !== 'production') {
+      if (allowInsecureOidcTls) {
         client[custom.http_options] = (url, options) => {
           const parsedUrl = new URL(url);
           if (parsedUrl.protocol === 'https:') {
@@ -81,12 +85,12 @@ async function initializeOIDC() {
         };
       }
 
-      console.log('✅ OpenID Connect client initialized with signature validation');
-      if (process.env.NODE_ENV !== 'production') {
-        console.log('⚠️  Development mode: Accepting self-signed certificates');
+      logger.info('OpenID Connect client initialized with signature validation');
+      if (allowInsecureOidcTls) {
+        logger.warn('Insecure OIDC TLS is enabled via ALLOW_INSECURE_OIDC_TLS=true');
       }
     } catch (error) {
-      console.error('❌ Failed to initialize OIDC client:', error.message);
+      logger.error('Failed to initialize OIDC client', { error: error.message });
       throw error;
     }
   }
@@ -101,22 +105,22 @@ passport.use('oidc', new CustomStrategy(async (req, done) => {
 
     // Handle callback from OIDC provider
     if (req.query.code) {
-      console.log('\n🔒 Processing OIDC callback with authorization code');
-      console.log('Authorization code received:', req.query.code.substring(0, 20) + '...');
+      logger.info('Processing OIDC callback with authorization code');
 
       const params = client.callbackParams(req);
-      console.log('Callback params:', JSON.stringify(params, null, 2));
+      logger.debug('OIDC callback params received', { queryKeys: Object.keys(params || {}) });
 
       const codeVerifier = req.session.codeVerifier;
       const state = req.session.state;
       const nonce = req.session.nonce;
 
-      console.log('Session state check:');
-      console.log('  - codeVerifier:', codeVerifier ? '✓ present' : '✗ MISSING');
-      console.log('  - state:', state ? '✓ present' : '✗ MISSING');
-      console.log('  - nonce:', nonce ? '✓ present' : '✗ MISSING');
+      logger.debug('OIDC callback session state check', {
+        hasCodeVerifier: Boolean(codeVerifier),
+        hasState: Boolean(state),
+        hasNonce: Boolean(nonce)
+      });
 
-      console.log('\n🔄 Exchanging authorization code for tokens...');
+      logger.info('Exchanging authorization code for tokens');
       // Exchange code for tokens with automatic signature validation
       const tokenSet = await client.callback(
         process.env.OIDC_CALLBACK_URL,
@@ -124,33 +128,39 @@ passport.use('oidc', new CustomStrategy(async (req, done) => {
         { code_verifier: codeVerifier, state, nonce }
       );
 
-      console.log('✅ Token exchange successful');
-      console.log('Token types received:', Object.keys(tokenSet));
-      console.log('Access token:', tokenSet.access_token ? '✓ present' : '✗ missing');
-      console.log('ID token:', tokenSet.id_token ? '✓ present' : '✗ missing');
-      console.log('Refresh token:', tokenSet.refresh_token ? '✓ present' : '✗ missing');
+      logger.info('Token exchange successful');
+      logger.debug('OIDC token set summary', {
+        tokenTypes: Object.keys(tokenSet),
+        hasAccessToken: Boolean(tokenSet.access_token),
+        hasIdToken: Boolean(tokenSet.id_token),
+        hasRefreshToken: Boolean(tokenSet.refresh_token)
+      });
 
       // Get validated claims from ID token (signature already verified by openid-client)
       const claims = tokenSet.claims();
 
-      console.log('\n👤 ID Token claims (signature validated):', JSON.stringify(claims, null, 2));
+      logger.debug('Validated OIDC claims received', {
+        sub: claims.sub,
+        email: claims.email,
+        preferredUsername: claims.preferred_username
+      });
 
       // Find or create user
-      console.log('\n🔍 Looking up user by OIDC sub:', claims.sub);
+      logger.info('Looking up user by OIDC subject', { sub: claims.sub });
       let user = await User.findOne({ where: { oidc_sub: claims.sub } });
 
       if (!user) {
-        console.log('👤 User not found, creating new user...');
+        logger.info('User not found, creating new user', { sub: claims.sub, email: claims.email });
         user = await User.create({
           oidc_sub: claims.sub,
           email: claims.email,
           display_name: claims.name || claims.preferred_username
         });
-        console.log('✅ New user created:', JSON.stringify({
+        logger.info('Created new user', {
           id: user.id,
           email: user.email,
           display_name: user.display_name
-        }, null, 2));
+        });
 
         // Auto-create local email account for the user
         const emailAccount = await EmailAccount.create({
@@ -158,18 +168,18 @@ passport.use('oidc', new CustomStrategy(async (req, done) => {
           email_address: claims.email,
           is_default: true
         });
-        console.log('📧 Email account created:', emailAccount.email_address);
+        logger.info('Created default email account for new user', { emailAddress: emailAccount.email_address, userId: user.id });
       } else {
-        console.log('✅ Existing user found, updating information...');
+        logger.info('Existing user found, updating profile', { userId: user.id, email: claims.email });
         await user.update({
           email: claims.email,
           display_name: claims.name || claims.preferred_username
         });
-        console.log('User updated:', JSON.stringify({
+        logger.info('Updated existing user', {
           id: user.id,
           email: user.email,
           display_name: user.display_name
-        }, null, 2));
+        });
 
         // Ensure user has an email account
         let emailAccount = await EmailAccount.findOne({
@@ -182,44 +192,46 @@ passport.use('oidc', new CustomStrategy(async (req, done) => {
             email_address: claims.email,
             is_default: true
           });
-          console.log('📧 Email account created:', emailAccount.email_address);
+          logger.info('Created missing email account for existing user', { emailAddress: emailAccount.email_address, userId: user.id });
         } else {
           // Update email address if changed
           if (emailAccount.email_address !== claims.email) {
             await emailAccount.update({ email_address: claims.email });
-            console.log('📧 Email account updated:', emailAccount.email_address);
+            logger.info('Updated email account address', { emailAddress: emailAccount.email_address, userId: user.id });
           }
         }
       }
 
-      console.log('\n✅ Authentication complete, passing user to passport\n');
+      logger.info('OIDC authentication complete', { userId: user.id, email: user.email });
       return done(null, user);
     }
 
     // Initial authorization request
-    console.log('\n🚀 Initiating OIDC authorization flow...');
+    logger.info('Initiating OIDC authorization flow');
 
     const codeVerifier = generators.codeVerifier();
     const codeChallenge = generators.codeChallenge(codeVerifier);
     const state = generators.state();
     const nonce = generators.nonce();
 
-    console.log('Generated PKCE parameters:');
-    console.log('  - Code verifier length:', codeVerifier.length);
-    console.log('  - Code challenge:', codeChallenge.substring(0, 20) + '...');
-    console.log('  - State:', state);
-    console.log('  - Nonce:', nonce);
+    logger.debug('Generated PKCE parameters', {
+      codeVerifierLength: codeVerifier.length,
+      codeChallengePrefix: codeChallenge.substring(0, 20),
+      hasState: Boolean(state),
+      hasNonce: Boolean(nonce)
+    });
 
     // Store for callback validation
     req.session.codeVerifier = codeVerifier;
     req.session.state = state;
     req.session.nonce = nonce;
 
-    console.log('\n💾 Saved to session:');
-    console.log('  - Session ID:', req.sessionID);
-    console.log('  - codeVerifier saved:', !!req.session.codeVerifier);
-    console.log('  - state saved:', !!req.session.state);
-    console.log('  - nonce saved:', !!req.session.nonce);
+    logger.debug('Saved OIDC challenge data to session', {
+      sessionId: req.sessionID,
+      hasCodeVerifier: !!req.session.codeVerifier,
+      hasState: !!req.session.state,
+      hasNonce: !!req.session.nonce
+    });
 
     const authUrl = client.authorizationUrl({
       scope: process.env.OIDC_SCOPE || 'openid profile email',
@@ -233,48 +245,45 @@ passport.use('oidc', new CustomStrategy(async (req, done) => {
     const publicIssuer = process.env.OIDC_PUBLIC_ISSUER || process.env.OIDC_ISSUER;
     const publicAuthUrl = authUrl.replace(process.env.OIDC_ISSUER, publicIssuer);
 
-    console.log('\n🔗 Authorization URL:', publicAuthUrl);
-    console.log('🌐 Redirecting user to OIDC provider...\n');
+    logger.info('Redirecting user to OIDC provider', { authorizationUrl: publicAuthUrl });
 
     // Redirect to OIDC provider
     req.res.redirect(publicAuthUrl);
 
   } catch (error) {
-    console.error('\n❌ OIDC AUTHENTICATION ERROR ❌');
-    console.error('Error type:', error.constructor.name);
-    console.error('Error message:', error.message);
-    console.error('Error stack:', error.stack);
-    if (error.response) {
-      console.error('HTTP Response:', {
+    logger.error('OIDC authentication error', {
+      errorType: error.constructor?.name,
+      error: error.message,
+      stack: error.stack,
+      response: error.response ? {
         status: error.response.status,
         statusText: error.response.statusText,
         data: error.response.data
-      });
-    }
-    console.error('================================\n');
+      } : undefined
+    });
     return done(error);
   }
 }));
 
 // Serialize user to session
 passport.serializeUser((user, done) => {
-  console.log('📝 Serializing user to session:', user.id);
+  logger.debug('Serializing user to session', { userId: user.id });
   done(null, user.id);
 });
 
 // Deserialize user from session
 passport.deserializeUser(async (id, done) => {
-  console.log('📖 Deserializing user from session:', id);
+  logger.debug('Deserializing user from session', { userId: id });
   try {
     const user = await User.findByPk(id);
     if (user) {
-      console.log('✅ User deserialized:', user.email);
+      logger.debug('User deserialized', { userId: user.id, email: user.email });
     } else {
-      console.log('⚠️ User not found in database:', id);
+      logger.warn('User not found during deserialization', { userId: id });
     }
     done(null, user);
   } catch (error) {
-    console.error('❌ Deserialization error:', error.message);
+    logger.error('Deserialization error', { error: error.message, userId: id });
     done(error);
   }
 });

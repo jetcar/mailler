@@ -5,15 +5,19 @@ WORKDIR /app
 
 # Copy package files first
 COPY package*.json ./
+COPY docker-entrypoint.sh ./docker-entrypoint.sh
 
 # Install dependencies
 RUN npm ci
+RUN chmod +x /app/docker-entrypoint.sh
 
 # Copy rest of application
 COPY . .
 
 # Expose Vite dev server port
 EXPOSE 5173
+
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 
 # Run Vite dev server with host binding for Docker
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]

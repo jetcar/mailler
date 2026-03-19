@@ -3,13 +3,12 @@ const { simpleParser } = require('mailparser');
 const { Message, EmailAccount } = require('../models');
 const fs = require('fs');
 const path = require('path');
+const { logger } = require('../middleware/errorHandler');
 
 class SMTPListenerService {
     constructor() {
         this.servers = [];
-
-        // Load TLS certificates if available
-        this.tlsOptions = this.loadTLSCertificates();
+        this.tlsOptions = null;
     }
 
     /**
@@ -22,17 +21,17 @@ class SMTPListenerService {
             const certFile = path.join(certPath, 'localhost.crt');
 
             if (fs.existsSync(keyFile) && fs.existsSync(certFile)) {
-                console.log('🔐 Loading TLS certificates for SMTP');
+                logger.info('Loading TLS certificates for SMTP', { certPath });
                 return {
                     key: fs.readFileSync(keyFile),
                     cert: fs.readFileSync(certFile)
                 };
             } else {
-                console.warn('⚠️  TLS certificates not found - SMTP will run without encryption');
+                logger.warn('TLS certificates not found; SMTP will run without encryption', { certPath });
                 return null;
             }
         } catch (error) {
-            console.error('❌ Error loading TLS certificates:', error.message);
+            logger.error('Error loading SMTP TLS certificates', { error: error.message });
             return null;
         }
     }
@@ -44,6 +43,10 @@ class SMTPListenerService {
     start(port = 2525) {
         const isImplicitTLS = port === 465; // Port 465 uses implicit TLS
         const isSubmissionPort = port === 587; // Port 587 requires STARTTLS
+
+        if (this.tlsOptions === null) {
+            this.tlsOptions = this.loadTLSCertificates();
+        }
 
         const serverOptions = {
             // Disable authentication for local testing
@@ -66,7 +69,7 @@ class SMTPListenerService {
 
             // Handle incoming connections
             onConnect(session, callback) {
-                console.log(`📨 SMTP connection from ${session.remoteAddress} on port ${port}`);
+                logger.debug('SMTP connection opened', { remoteAddress: session.remoteAddress, port });
                 return callback();
             },
 
@@ -76,10 +79,12 @@ class SMTPListenerService {
                     // Parse email
                     const parsed = await simpleParser(stream);
 
-                    console.log('📧 Received email:');
-                    console.log('  From:', parsed.from?.text);
-                    console.log('  To:', parsed.to?.text);
-                    console.log('  Subject:', parsed.subject);
+                    logger.info('SMTP email received', {
+                        from: parsed.from?.text,
+                        to: parsed.to?.text,
+                        subject: parsed.subject,
+                        port
+                    });
 
                     // Extract recipient email addresses
                     const recipients = parsed.to?.value || [];
@@ -110,15 +115,15 @@ class SMTPListenerService {
                                 is_starred: false
                             });
 
-                            console.log(`  ✅ Stored in account: ${emailAddress}`);
+                            logger.info('Stored received email', { emailAddress, accountId: account.id, port });
                         } else {
-                            console.log(`  ⚠️  No account found for: ${emailAddress}`);
+                            logger.warn('No local account found for SMTP recipient', { emailAddress, port });
                         }
                     }
 
                     callback();
                 } catch (error) {
-                    console.error('❌ Error processing email:', error);
+                    logger.error('Error processing received email', { error: error.message, port });
                     callback(error);
                 }
             }
@@ -137,11 +142,11 @@ class SMTPListenerService {
             } else {
                 tlsStatus = '(no encryption)';
             }
-            console.log(`✅ SMTP server listening on port ${port} ${tlsStatus}`);
+            logger.info('SMTP server listening', { port, tlsStatus });
         });
 
         this.server.on('error', (error) => {
-            console.error(`❌ SMTP server error on port ${port}:`, error.message);
+            logger.error('SMTP server error', { port, error: error.message });
         });
 
         this.servers.push(this.server);
@@ -153,7 +158,7 @@ class SMTPListenerService {
      * @param {number[]} ports - Array of ports to listen on
      */
     startMultiple(ports = [25, 587, 465, 2525]) {
-        console.log(`🚀 Starting SMTP servers on ports: ${ports.join(', ')}`);
+        logger.info('Starting SMTP servers', { ports });
         for (const port of ports) {
             this.start(port);
         }
@@ -165,7 +170,7 @@ class SMTPListenerService {
     stop() {
         for (const server of this.servers) {
             server.close(() => {
-                console.log('SMTP server stopped');
+                logger.info('SMTP server stopped');
             });
         }
         this.servers = [];

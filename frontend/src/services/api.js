@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { logger } from '../utils/logger';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || '',
@@ -8,33 +9,19 @@ const api = axios.create({
 // Request interceptor - log outgoing requests
 api.interceptors.request.use(
   (config) => {
-    const timestamp = new Date().toISOString();
-    console.log(`\n🔵 [${timestamp}] API Request`);
-    console.log(`   Method: ${config.method.toUpperCase()}`);
-    console.log(`   URL: ${config.baseURL}${config.url}`);
-
-    if (config.params && Object.keys(config.params).length > 0) {
-      console.log(`   Params:`, config.params);
-    }
-
-    if (config.data) {
-      console.log(`   Data:`, config.data);
-    }
-
-    if (config.headers) {
-      console.log(`   Headers:`, {
-        'Content-Type': config.headers['Content-Type'],
-        'Accept': config.headers['Accept']
-      });
-    }
-
-    // Store request start time for duration calculation
     config.metadata = { startTime: Date.now() };
+
+    logger.debug('API request', {
+      method: config.method?.toUpperCase(),
+      url: `${config.baseURL || ''}${config.url}`,
+      hasParams: Boolean(config.params && Object.keys(config.params).length > 0),
+      hasBody: Boolean(config.data)
+    });
 
     return config;
   },
   (error) => {
-    console.error('❌ Request Error:', error);
+    logger.error('API request setup failed', { error });
     return Promise.reject(error);
   }
 );
@@ -42,54 +29,44 @@ api.interceptors.request.use(
 // Response interceptor - log responses and errors
 api.interceptors.response.use(
   (response) => {
-    const timestamp = new Date().toISOString();
     const duration = Date.now() - response.config.metadata.startTime;
 
-    console.log(`\n✅ [${timestamp}] API Response`);
-    console.log(`   Method: ${response.config.method.toUpperCase()}`);
-    console.log(`   URL: ${response.config.url}`);
-    console.log(`   Status: ${response.status} ${response.statusText}`);
-    console.log(`   Duration: ${duration}ms`);
-
-    if (response.data) {
-      console.log(`   Data:`, response.data);
-    }
+    logger.debug('API response', {
+      method: response.config.method?.toUpperCase(),
+      url: response.config.url,
+      status: response.status,
+      duration
+    });
 
     return response;
   },
   (error) => {
-    const timestamp = new Date().toISOString();
-
     if (error.response) {
-      // Server responded with error status
       const duration = error.config?.metadata?.startTime
         ? Date.now() - error.config.metadata.startTime
         : 0;
 
-      console.error(`\n❌ [${timestamp}] API Error Response`);
-      console.error(`   Method: ${error.config.method.toUpperCase()}`);
-      console.error(`   URL: ${error.config.url}`);
-      console.error(`   Status: ${error.response.status} ${error.response.statusText}`);
-      console.error(`   Duration: ${duration}ms`);
-      console.error(`   Error Data:`, error.response.data);
+      logger.error('API error response', {
+        method: error.config?.method?.toUpperCase(),
+        url: error.config?.url,
+        status: error.response.status,
+        duration,
+        data: error.response.data
+      });
 
-      // Redirect to login page on 401 Unauthorized
       if (error.response.status === 401) {
-        console.warn('⚠️  Unauthorized - redirecting to login page');
-        // Only redirect if not already on login page
+        logger.warn('Unauthorized response received; redirecting to login');
         if (!window.location.pathname.includes('/auth/login') && window.location.pathname !== '/') {
-          window.location.href = '/';
+          window.location.assign('/');
         }
       }
     } else if (error.request) {
-      // Request made but no response
-      console.error(`\n❌ [${timestamp}] No Response`);
-      console.error(`   URL: ${error.config?.url}`);
-      console.error(`   Error:`, error.message);
+      logger.error('API request received no response', {
+        url: error.config?.url,
+        error: error.message
+      });
     } else {
-      // Something else happened
-      console.error(`\n❌ [${timestamp}] Request Setup Error`);
-      console.error(`   Error:`, error.message);
+      logger.error('API request failed before sending', { error: error.message });
     }
 
     return Promise.reject(error);
@@ -99,7 +76,7 @@ api.interceptors.response.use(
 export const authAPI = {
   getMe: () => api.get('/auth/me'),
   login: () => {
-    window.location.href = '/auth/login';
+    window.location.assign('/auth/login');
   },
   logout: () => api.get('/auth/logout')
 };

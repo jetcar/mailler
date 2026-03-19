@@ -1,8 +1,12 @@
 const crypto = require('crypto');
 
 const ALGORITHM = 'aes-256-cbc';
-const ENCRYPTION_KEY = Buffer.from(process.env.ENCRYPTION_KEY || 'default_key_change_me_32_chars', 'utf8');
 const IV_LENGTH = 16;
+
+function getEncryptionKey() {
+  const source = process.env.ENCRYPTION_KEY || 'development-encryption-key';
+  return crypto.createHash('sha256').update(source).digest();
+}
 
 class EncryptionService {
   /**
@@ -12,13 +16,13 @@ class EncryptionService {
    */
   encrypt(text) {
     if (!text) return null;
-    
+
     const iv = crypto.randomBytes(IV_LENGTH);
-    const cipher = crypto.createCipheriv(ALGORITHM, ENCRYPTION_KEY, iv);
-    
+    const cipher = crypto.createCipheriv(ALGORITHM, getEncryptionKey(), iv);
+
     let encrypted = cipher.update(text, 'utf8', 'hex');
     encrypted += cipher.final('hex');
-    
+
     return iv.toString('hex') + ':' + encrypted;
   }
 
@@ -29,16 +33,16 @@ class EncryptionService {
    */
   decrypt(text) {
     if (!text) return null;
-    
+
     const parts = text.split(':');
     const iv = Buffer.from(parts.shift(), 'hex');
     const encryptedText = parts.join(':');
-    
-    const decipher = crypto.createDecipheriv(ALGORITHM, ENCRYPTION_KEY, iv);
-    
+
+    const decipher = crypto.createDecipheriv(ALGORITHM, getEncryptionKey(), iv);
+
     let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
     decrypted += decipher.final('utf8');
-    
+
     return decrypted;
   }
 }

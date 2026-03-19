@@ -4,13 +4,14 @@ const { Message, EmailAccount } = require('../models');
 const mailerService = require('../services/mailer');
 const receiverService = require('../services/receiver');
 const { Op } = require('sequelize');
+const { logger } = require('../middleware/errorHandler');
 
 const router = express.Router();
 
 // Get messages for current user
 router.get('/', ensureAuthenticated, async (req, res, next) => {
   try {
-    const { folder = 'INBOX', limit = 50, offset = 0, search } = req.query;
+    const { folder, limit = 1000, offset = 0, search } = req.query;
 
     // Get user's email accounts
     const accounts = await EmailAccount.findAll({
@@ -24,7 +25,8 @@ router.get('/', ensureAuthenticated, async (req, res, next) => {
       account_id: { [Op.in]: accountIds }
     };
 
-    if (folder) {
+    // Only filter by folder if explicitly specified
+    if (folder && folder !== 'All') {
       where.folder = folder;
     }
 
@@ -164,7 +166,10 @@ router.post('/import/folders', ensureAuthenticated, async (req, res, next) => {
       });
     }
 
-    console.log(`📂 User ${req.user.email} fetching folders from ${imap_host}`);
+    logger.info('Fetching import folders', {
+      user: req.user.email,
+      host: imap_host
+    });
 
     const folders = await receiverService.fetchFolders({
       host: imap_host,
@@ -193,7 +198,7 @@ router.get('/import/progress/:sessionId', ensureAuthenticated, (req, res) => {
 
   // Send initial connection message
   res.write(`data: ${JSON.stringify({ type: 'connected', sessionId })}\n\n`);
-  console.log(`📡 SSE connection established for session: ${sessionId}`);
+  logger.info('SSE import progress connection established', { sessionId });
 
   // Set up event listeners
   const logHandler = (data) => {
@@ -201,7 +206,7 @@ router.get('/import/progress/:sessionId', ensureAuthenticated, (req, res) => {
       try {
         res.write(`data: ${JSON.stringify(data)}\n\n`);
       } catch (error) {
-        console.error('Failed to send log event:', error);
+        logger.error('Failed to send import log event', { error: error.message, sessionId });
       }
     }
   };
@@ -210,12 +215,11 @@ router.get('/import/progress/:sessionId', ensureAuthenticated, (req, res) => {
     if (data.sessionId === sessionId) {
       try {
         const completeData = { type: 'complete', ...data };
-        console.log(`📡 Sending completion event for session ${sessionId}:`, completeData);
         res.write(`data: ${JSON.stringify(completeData)}\n\n`);
         res.end();
-        console.log(`📡 SSE connection closed for session: ${sessionId}`);
+        logger.info('SSE import progress connection closed', { sessionId });
       } catch (error) {
-        console.error('Failed to send complete event:', error);
+        logger.error('Failed to send import completion event', { error: error.message, sessionId });
         res.end();
       }
     }
@@ -226,7 +230,7 @@ router.get('/import/progress/:sessionId', ensureAuthenticated, (req, res) => {
 
   // Clean up on client disconnect
   req.on('close', () => {
-    console.log(`📡 SSE client disconnected for session: ${sessionId}`);
+    logger.info('SSE import progress client disconnected', { sessionId });
     receiverService.off('import:log', logHandler);
     receiverService.off('import:complete', completeHandler);
   });
@@ -249,7 +253,12 @@ router.post('/import/multi', ensureAuthenticated, async (req, res, next) => {
       return res.status(403).json({ error: 'Invalid account' });
     }
 
-    console.log(`📥 User ${req.user.email} importing from ${folders.length} folders on ${imap_host}`);
+    logger.info('Starting multi-folder import', {
+      user: req.user.email,
+      host: imap_host,
+      folderCount: folders.length,
+      sessionId: session_id
+    });
 
     // Return immediately - import runs in background
     res.status(202).json({
@@ -271,7 +280,7 @@ router.post('/import/multi', ensureAuthenticated, async (req, res, next) => {
       10, // Process in batches of 10 messages
       session_id
     ).catch(error => {
-      console.error('Background import failed:', error);
+      logger.error('Background import failed', { error: error.message, sessionId: session_id });
       receiverService.emitLog(session_id, 'error', `Import failed: ${error.message}`);
       receiverService.emit('import:complete', {
         sessionId: session_id,
@@ -293,7 +302,10 @@ router.post('/import/stop/:sessionId', ensureAuthenticated, async (req, res, nex
   try {
     const { sessionId } = req.params;
 
-    console.log(`🛑 User ${req.user.email} requesting stop for session ${sessionId}`);
+    logger.info('Stopping import session', {
+      user: req.user.email,
+      sessionId
+    });
 
     const stopped = receiverService.stopImport(sessionId);
 
@@ -331,7 +343,11 @@ router.post('/import', ensureAuthenticated, async (req, res, next) => {
       return res.status(403).json({ error: 'Invalid account' });
     }
 
-    console.log(`📥 User ${req.user.email} importing from ${imap_host}`);
+    logger.info('Starting single-folder import', {
+      user: req.user.email,
+      host: imap_host,
+      folder: folder || 'INBOX'
+    });
 
     const result = await receiverService.importFromExternal(
       account_id,

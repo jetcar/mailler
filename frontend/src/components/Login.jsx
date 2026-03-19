@@ -1,35 +1,32 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { authAPI } from '../services/api';
+import { logger } from '../utils/logger';
 
 export default function Login() {
-  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    console.log(`\n🔐 [${new Date().toISOString()}] Login Component Mounted`);
     checkAuth();
   }, []);
 
   const checkAuth = async () => {
-    console.log(`\n🔍 [${new Date().toISOString()}] Checking Authentication`);
     try {
       const response = await authAPI.getMe();
       if (response.data.authenticated) {
-        console.log(`✅ User is authenticated:`, response.data.user);
-        setUser(response.data.user);
-      } else {
-        console.log(`ℹ️  User is not authenticated`);
+        logger.info('Authenticated user returned to login page; redirecting to inbox');
+        navigate('/inbox', { replace: true });
+        return;
       }
     } catch (error) {
-      console.error(`❌ Auth check failed:`, error);
+      logger.error('Auth check failed', { error });
     } finally {
       setLoading(false);
     }
   };
 
   const handleLogin = () => {
-    console.log(`\n🔓 [${new Date().toISOString()}] Initiating Login`);
-    console.log(`   Redirecting to: /auth/login`);
     authAPI.login();
   };
 
@@ -38,20 +35,6 @@ export default function Login() {
       <div style={styles.container}>
         <div style={styles.card}>
           <p>Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (user) {
-    return (
-      <div style={styles.container}>
-        <div style={styles.card}>
-          <h2>Welcome, {user.display_name || user.email}!</h2>
-          <p>You are logged in as {user.email}</p>
-          <button style={styles.button} onClick={() => window.location.href = '/inbox'}>
-            Go to Inbox
-          </button>
         </div>
       </div>
     );

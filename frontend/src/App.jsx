@@ -2,19 +2,23 @@ import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import Login from './components/Login';
 import Inbox from './components/Inbox';
+import MessageList from './components/MessageList';
+import MessageDetail from './components/MessageDetail';
 import Compose from './components/Compose';
 import Settings from './components/Settings';
 import './App.css';
+import { logger } from './utils/logger';
 
 // Navigation logger component
 function NavigationLogger() {
   const location = useLocation();
 
   useEffect(() => {
-    console.log(`\n📍 [${new Date().toISOString()}] Navigation`);
-    console.log(`   Path: ${location.pathname}`);
-    console.log(`   Search: ${location.search || '(none)'}`);
-    console.log(`   Hash: ${location.hash || '(none)'}`);
+    logger.debug('Navigation changed', {
+      path: location.pathname,
+      search: location.search,
+      hash: location.hash
+    });
   }, [location]);
 
   return null;
@@ -22,9 +26,10 @@ function NavigationLogger() {
 
 export default function App() {
   useEffect(() => {
-    console.log(`\n🚀 [${new Date().toISOString()}] Application Started`);
-    console.log(`   Environment: ${import.meta.env.MODE}`);
-    console.log(`   API URL: ${import.meta.env.VITE_API_URL || 'http://localhost:3000'}`);
+    logger.info('Application started', {
+      environment: import.meta.env.MODE,
+      apiUrl: import.meta.env.VITE_API_URL || 'http://localhost:3000'
+    });
   }, []);
 
   return (
@@ -32,7 +37,10 @@ export default function App() {
       <NavigationLogger />
       <Routes>
         <Route path="/" element={<Login />} />
-        <Route path="/inbox" element={<Inbox />} />
+        <Route path="/inbox" element={<Inbox />}>
+          <Route index element={<MessageList />} />
+          <Route path=":messageId" element={<MessageDetail />} />
+        </Route>
         <Route path="/compose" element={<Compose />} />
         <Route path="/settings" element={<Settings />} />
       </Routes>

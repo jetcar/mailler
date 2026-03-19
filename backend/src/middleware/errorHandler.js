@@ -21,36 +21,14 @@ const logger = winston.createLogger({
  * Error handler middleware
  */
 function errorHandler(err, req, res, next) {
-  console.error('\n❌ ========== ERROR OCCURRED ==========');
-  console.error('Timestamp:', new Date().toISOString());
-  console.error('URL:', req.originalUrl);
-  console.error('Method:', req.method);
-  console.error('Error type:', err.constructor.name);
-  console.error('Error message:', err.message);
-  console.error('Error stack:', err.stack);
-
-  if (req.sessionID) {
-    console.error('Session ID:', req.sessionID);
-  }
-
-  if (req.user) {
-    console.error('User:', req.user.email || req.user.id);
-  }
-
-  if (err.response) {
-    console.error('HTTP Response:', {
-      status: err.response.status,
-      statusText: err.response.statusText,
-      data: err.response.data
-    });
-  }
-  console.error('========================================\n');
-
-  logger.error('Error:', {
+  logger.error('Unhandled request error', {
     message: err.message,
     stack: err.stack,
-    url: req.url,
-    method: req.method
+    errorType: err.constructor?.name,
+    url: req.originalUrl,
+    method: req.method,
+    user: req.user?.email || req.user?.id,
+    status: err.status || err.response?.status
   });
 
   const status = err.status || 500;

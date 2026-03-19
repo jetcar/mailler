@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { messagesAPI, accountsAPI } from '../services/api';
+import { logger } from '../utils/logger';
 
 export default function Compose() {
+  const navigate = useNavigate();
   const [accounts, setAccounts] = useState([]);
   const [formData, setFormData] = useState({
     account_id: '',
@@ -25,7 +28,7 @@ export default function Compose() {
         setFormData(f => ({ ...f, account_id: defaultAccount.id }));
       }
     } catch (error) {
-      console.error('Failed to load accounts:', error);
+      logger.error('Failed to load accounts', { error });
     }
   };
 
@@ -37,17 +40,16 @@ export default function Compose() {
     e.preventDefault();
 
     if (!formData.account_id || !formData.to || !formData.subject) {
-      console.warn('Required fields missing: account_id, to, subject');
+      logger.warn('Required fields missing for send email');
       return;
     }
 
     try {
       setSending(true);
       await messagesAPI.send(formData);
-      console.log('Email sent successfully');
-      window.location.href = '/inbox';
+      navigate('/inbox');
     } catch (error) {
-      console.error('Failed to send email:', error.message);
+      logger.error('Failed to send email', { error: error.message });
     } finally {
       setSending(false);
     }
@@ -57,7 +59,7 @@ export default function Compose() {
     <div style={styles.container}>
       <header style={styles.header}>
         <h1>📧 Compose Email</h1>
-        <button style={styles.button} onClick={() => window.location.href = '/inbox'}>
+        <button style={styles.button} onClick={() => navigate('/inbox')}>
           Back to Inbox
         </button>
       </header>

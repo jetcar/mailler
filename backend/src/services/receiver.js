@@ -4,6 +4,9 @@ const { simpleParser } = require('mailparser');
 const fs = require('fs').promises;
 const path = require('path');
 const EventEmitter = require('events');
+const { logger } = require('../middleware/errorHandler');
+
+const allowInsecureImapTls = process.env.ALLOW_INSECURE_IMAP_TLS === 'true';
 
 class ReceiverService extends EventEmitter {
   constructor() {
@@ -17,7 +20,7 @@ class ReceiverService extends EventEmitter {
   stopImport(sessionId) {
     if (this.activeImports.has(sessionId)) {
       this.activeImports.set(sessionId, true); // Set cancellation flag
-      console.log(`🛑 Stop requested for session ${sessionId}`);
+      logger.info('Import stop requested', { sessionId });
       this.emitLog(sessionId, 'warning', 'Stop requested, finishing current batch...');
       return true;
     }
@@ -44,10 +47,10 @@ class ReceiverService extends EventEmitter {
       const filepath = path.join(debugDir, filename);
 
       await fs.writeFile(filepath, content);
-      console.log(`     💾 Saved debug email: ${filename}`);
+      logger.debug('Saved debug email', { filename, uid, reason });
       return filepath;
     } catch (err) {
-      console.error(`     ⚠️  Failed to save debug email:`, err.message);
+      logger.error('Failed to save debug email', { error: err.message, uid, reason });
     }
   }
 
@@ -89,7 +92,7 @@ class ReceiverService extends EventEmitter {
         isStarred: msg.is_starred
       }));
     } catch (error) {
-      console.error('Error fetching emails:', error);
+      logger.error('Error fetching emails', { error: error.message, accountId, folder });
       throw error;
     }
   }
@@ -113,7 +116,11 @@ class ReceiverService extends EventEmitter {
         where: { account_id: accountId }
       });
 
-      console.log(`📧 Email account ${account.email_address} has ${count} messages (received via SMTP)`);
+      logger.info('SMTP-backed account sync checked', {
+        accountId,
+        emailAddress: account.email_address,
+        totalMessages: count
+      });
 
       return {
         synced: 0,
@@ -121,7 +128,7 @@ class ReceiverService extends EventEmitter {
         message: 'Emails are received automatically via SMTP server'
       };
     } catch (error) {
-      console.error('Error syncing emails:', error);
+      logger.error('Error syncing emails', { error: error.message, accountId });
       throw error;
     }
   }
@@ -135,7 +142,7 @@ class ReceiverService extends EventEmitter {
     let connection;
 
     try {
-      console.log(`📂 Fetching folders from ${imapConfig.host}...`);
+      logger.info('Fetching folders from IMAP server', { host: imapConfig.host });
 
       const config = {
         imap: {
@@ -144,7 +151,7 @@ class ReceiverService extends EventEmitter {
           host: imapConfig.host,
           port: imapConfig.port || 993,
           tls: true,
-          tlsOptions: { rejectUnauthorized: false }
+          tlsOptions: { rejectUnauthorized: !allowInsecureImapTls }
         }
       };
 
@@ -176,12 +183,12 @@ class ReceiverService extends EventEmitter {
       };
 
       const folders = parseFolders(boxes);
-      console.log(`✅ Found ${folders.length} folders`);
+      logger.info('Fetched IMAP folders', { host: imapConfig.host, folderCount: folders.length });
 
       return folders;
     } catch (error) {
       if (connection) connection.end();
-      console.error('❌ Error fetching folders:', error);
+      logger.error('Error fetching folders', { error: error.message, host: imapConfig.host });
       throw error;
     }
   }
@@ -206,14 +213,14 @@ class ReceiverService extends EventEmitter {
       cancelled: false
     };
 
-    console.log(`📥 Starting multi-folder import: ${folders.length} folders (batch size: ${batchSize})`);
+    logger.info('Starting multi-folder import', { folderCount: folders.length, batchSize, sessionId });
     this.emitLog(sessionId, 'info', `Starting import from ${folders.length} folders (processing in batches of ${batchSize})`);
 
     try {
       for (let i = 0; i < folders.length; i++) {
         // Check for cancellation
         if (this.shouldStopImport(sessionId)) {
-          console.log(`🛑 Import cancelled by user`);
+          logger.warn('Import cancelled by user', { sessionId });
           this.emitLog(sessionId, 'warning', '🛑 Import stopped by user');
           results.cancelled = true;
           break;
@@ -221,7 +228,7 @@ class ReceiverService extends EventEmitter {
 
         const folder = folders[i];
         try {
-          console.log(`\n📁 Importing from folder: ${folder}`);
+          logger.info('Importing folder', { folder, index: i + 1, totalFolders: folders.length, sessionId });
           this.emitLog(sessionId, 'info', `[${i + 1}/${folders.length}] Processing folder: ${folder}`);
 
           const result = await this.importFromExternal(accountId, imapConfig, folder, batchSize, sessionId);
@@ -252,7 +259,7 @@ class ReceiverService extends EventEmitter {
 
           this.emitLog(sessionId, 'success', `✅ ${folder}: ${result.imported} imported, ${result.skipped} skipped`);
         } catch (error) {
-          console.error(`❌ Failed to import from folder ${folder}:`, error.message);
+          logger.error('Failed to import folder', { folder, error: error.message, sessionId });
           this.emitLog(sessionId, 'error', `❌ ${folder}: ${error.message}`);
           results.folders.push({
             name: folder,
@@ -264,10 +271,18 @@ class ReceiverService extends EventEmitter {
       }
 
       if (!results.cancelled) {
-        console.log(`\n✅ Multi-folder import complete: ${results.totalImported} total imported, ${results.totalSkipped} total skipped`);
+        logger.info('Multi-folder import complete', {
+          sessionId,
+          totalImported: results.totalImported,
+          totalSkipped: results.totalSkipped
+        });
         this.emitLog(sessionId, 'success', `Import complete! Total: ${results.totalImported} imported, ${results.totalSkipped} skipped`);
       } else {
-        console.log(`\n🛑 Import stopped: ${results.totalImported} total imported, ${results.totalSkipped} total skipped`);
+        logger.warn('Multi-folder import stopped', {
+          sessionId,
+          totalImported: results.totalImported,
+          totalSkipped: results.totalSkipped
+        });
         this.emitLog(sessionId, 'warning', `Import stopped. Processed: ${results.totalImported} imported, ${results.totalSkipped} skipped`);
       }
 
@@ -322,7 +337,13 @@ class ReceiverService extends EventEmitter {
         throw new Error('Email account not found');
       }
 
-      console.log(`📥 Importing emails from ${imapConfig.host} to ${account.email_address}...`);
+      logger.info('Importing emails from external IMAP', {
+        host: imapConfig.host,
+        accountId,
+        emailAddress: account.email_address,
+        folder,
+        sessionId
+      });
       this.emitLog(sessionId, 'info', `Connecting to ${imapConfig.host}...`);
 
       // Connect to external IMAP server
@@ -333,7 +354,7 @@ class ReceiverService extends EventEmitter {
           host: imapConfig.host,
           port: imapConfig.port || 993,
           tls: true,
-          tlsOptions: { rejectUnauthorized: false },
+          tlsOptions: { rejectUnauthorized: !allowInsecureImapTls },
           authTimeout: 30000,
           connTimeout: 60000,
           keepalive: {
@@ -344,28 +365,28 @@ class ReceiverService extends EventEmitter {
         }
       };
 
-      console.log(`🔌 Connecting to IMAP server...`);
+      logger.debug('Connecting to IMAP server', { host: imapConfig.host, folder, sessionId });
       connection = await imaps.connect(config);
-      console.log(`✅ Connected to ${imapConfig.host}`);
+      logger.info('Connected to IMAP server', { host: imapConfig.host, sessionId });
       this.emitLog(sessionId, 'info', `Connected! Opening folder: ${folder}`);
 
-      console.log(`📂 Opening folder: ${folder}...`);
+      logger.debug('Opening IMAP folder', { host: imapConfig.host, folder, sessionId });
       await connection.openBox(folder);
-      console.log(`✅ Folder opened: ${folder}`);
+      logger.info('IMAP folder opened', { folder, sessionId });
 
       // Search for all emails
-      console.log(`🔍 Searching for email UIDs (this may take a while for large folders)...`);
+      logger.info('Searching IMAP message UIDs', { folder, sessionId });
       this.emitLog(sessionId, 'info', `Searching for emails in ${folder}...`);
 
       const searchCriteria = ['ALL'];
 
-      console.log(`⏳ Fetching message UIDs (not downloading bodies yet)...`);
+      logger.debug('Fetching message UIDs', { folder, sessionId });
       const startTime = Date.now();
 
       // Add a progress indicator for long searches
       progressInterval = setInterval(() => {
         const elapsed = ((Date.now() - startTime) / 1000).toFixed(0);
-        console.log(`   ⏳ Still searching for UIDs... (${elapsed}s elapsed)`);
+        logger.debug('Still searching for message UIDs', { folder, elapsedSeconds: elapsed, sessionId });
         this.emitLog(sessionId, 'info', `Still searching for message UIDs... (${elapsed}s elapsed)`);
       }, 10000); // Log every 10 seconds
 
@@ -375,7 +396,12 @@ class ReceiverService extends EventEmitter {
       progressInterval = null;
       const searchDuration = ((Date.now() - startTime) / 1000).toFixed(1);
 
-      console.log(`📬 Found ${searchResults.length} message UIDs in ${folder} (took ${searchDuration}s)`);
+      logger.info('Found message UIDs', {
+        folder,
+        totalMessages: searchResults.length,
+        durationSeconds: searchDuration,
+        sessionId
+      });
       this.emitLog(sessionId, 'info', `Found ${searchResults.length} messages, will download and process in batches of ${batchSize}...`);
 
       let imported = 0;
@@ -391,7 +417,15 @@ class ReceiverService extends EventEmitter {
         // Get UIDs for current batch
         const batchUids = searchResults.slice(batchStart, batchEnd).map(msg => msg.attributes.uid);
 
-        console.log(`  📥 Batch ${batchNum}/${totalBatches}: Downloading ${batchUids.length} messages (UIDs ${batchUids[0]}-${batchUids[batchUids.length - 1]})...`);
+        logger.info('Downloading import batch', {
+          batch: batchNum,
+          totalBatches,
+          messageCount: batchUids.length,
+          firstUid: batchUids[0],
+          lastUid: batchUids[batchUids.length - 1],
+          folder,
+          sessionId
+        });
         this.emitLog(sessionId, 'info', `📥 Batch ${batchNum}/${totalBatches}: Downloading ${batchUids.length} messages...`);
 
         const batchStartTime = Date.now();
@@ -407,7 +441,14 @@ class ReceiverService extends EventEmitter {
         const batch = await connection.search(uidCriteria, fetchOptions);
         const downloadDuration = ((Date.now() - batchStartTime) / 1000).toFixed(1);
 
-        console.log(`  ✅ Downloaded batch ${batchNum} in ${downloadDuration}s, processing...`);
+        logger.info('Downloaded import batch', {
+          batch: batchNum,
+          totalBatches,
+          downloadedMessages: batch.length,
+          durationSeconds: downloadDuration,
+          folder,
+          sessionId
+        });
         this.emitLog(sessionId, 'info', `✅ Downloaded ${batch.length} messages in ${downloadDuration}s, processing...`);
 
         for (let i = 0; i < batch.length; i++) {
@@ -430,59 +471,64 @@ class ReceiverService extends EventEmitter {
             let textPart = item.parts.find(part => part.which === 'TEXT');
             let fullPart = item.parts.find(part => part.which === '');
 
-            console.log(`  📦 UID ${uid} - Available parts:`, item.parts.map(p => p.which).join(', '));
+            logger.debug('Available message parts', { uid, parts: item.parts.map(p => p.which), folder, sessionId });
 
             let bodyContent = null;
 
             // Prefer full message, otherwise combine header + text
             if (fullPart && fullPart.body) {
               bodyContent = fullPart.body;
-              console.log(`  📦 UID ${uid} - Using full message part`);
+              logger.debug('Using full message part', { uid, folder, sessionId });
             } else if (headerPart && textPart && headerPart.body && textPart.body) {
               // Combine header and text parts
               const header = Buffer.isBuffer(headerPart.body) ? headerPart.body.toString('utf-8') : headerPart.body;
               const text = Buffer.isBuffer(textPart.body) ? textPart.body.toString('utf-8') : textPart.body;
               bodyContent = header + '\r\n' + text;
-              console.log(`  📦 UID ${uid} - Combined HEADER + TEXT parts`);
+              logger.debug('Combined header and text parts', { uid, folder, sessionId });
             } else if (headerPart && headerPart.body) {
               bodyContent = headerPart.body;
-              console.log(`  📦 UID ${uid} - Using HEADER part only`);
+              logger.debug('Using header-only message part', { uid, folder, sessionId });
             } else if (textPart && textPart.body) {
               bodyContent = textPart.body;
-              console.log(`  ⚠️  UID ${uid} - Using TEXT part only (may be missing headers)`);
+              logger.warn('Using text-only message part; headers may be missing', { uid, folder, sessionId });
             } else {
-              console.warn(`  ⚠️  Skipping UID ${uid} - malformed structure (no readable body parts)`);
+              logger.warn('Skipping malformed message with no readable body parts', { uid, folder, sessionId });
               skipped++;
               continue;
             }
 
             if (!bodyContent) {
-              console.warn(`  ⚠️  Skipping UID ${uid} - empty body content`);
+              logger.warn('Skipping message with empty body content', { uid, folder, sessionId });
               skipped++;
               continue;
             }
 
             // Log raw content before parsing
-            console.log(`     Body type: ${typeof bodyContent}`);
-            console.log(`     Body is Buffer: ${Buffer.isBuffer(bodyContent)}`);
-            console.log(`     Body length: ${bodyContent?.length || 0} bytes`);
+            logger.debug('Prepared message body', {
+              uid,
+              bodyType: typeof bodyContent,
+              isBuffer: Buffer.isBuffer(bodyContent),
+              bodyLength: bodyContent?.length || 0,
+              folder,
+              sessionId
+            });
 
             // Convert to string if it's a Buffer
             if (Buffer.isBuffer(bodyContent)) {
               bodyContent = bodyContent.toString('utf-8');
-              console.log(`     Converted Buffer to string (${bodyContent.length} chars)`);
+              logger.debug('Converted buffer body to string', { uid, length: bodyContent.length, folder, sessionId });
             }
 
             if (bodyContent) {
               const preview = bodyContent.substring(0, 500).replace(/\r?\n/g, '\\n');
-              console.log(`     Preview (first 500 chars): ${preview}${bodyContent.length > 500 ? '...' : ''}`);
+              logger.debug('Message preview prepared', { uid, preview: `${preview}${bodyContent.length > 500 ? '...' : ''}`, folder, sessionId });
 
               // Check if Subject header is present
               const subjectMatch = bodyContent.match(/^Subject:\s*(.*)$/mi);
               if (subjectMatch) {
-                console.log(`     ✅ Subject found in content: "${subjectMatch[1]}"`);
+                logger.debug('Subject found in raw content', { uid, subject: subjectMatch[1], folder, sessionId });
               } else {
-                console.warn(`     ⚠️  No Subject header found in content`);
+                logger.warn('No Subject header found in raw content', { uid, folder, sessionId });
               }
             }
 
@@ -496,35 +542,39 @@ class ReceiverService extends EventEmitter {
               fullContent = idHeader + bodyContent;
             }
 
-            console.log(`     Full content length (with header): ${fullContent.length} bytes`);
+            logger.debug('Prepared full message content', { uid, contentLength: fullContent.length, folder, sessionId });
 
             // Parse email with error handling
             try {
               parsed = await simpleParser(fullContent);
-              console.log(`     ✅ Parsing successful`);
+              logger.debug('Email parsing successful', { uid, folder, sessionId });
             } catch (parseError) {
-              console.error(`     ❌ Parsing failed:`, parseError.message);
+              logger.error('Email parsing failed', { uid, error: parseError.message, folder, sessionId });
               await this.saveDebugEmail(uid, fullContent, 'parse-error');
               throw new Error(`Failed to parse email: ${parseError.message}`);
             }
 
-            console.log(`  📧 Processing: "${parsed.subject || '(no subject)'}" from ${parsed.from?.text || '(unknown)'}`);
-            console.log(`     📋 Message-ID: ${parsed.messageId || '(missing)'}`);
-            console.log(`     📅 Date: ${parsed.date || '(no date)'}`);
-            console.log(`     📝 Headers:`, {
+            logger.debug('Parsed email metadata', {
+              uid,
+              subject: parsed.subject || '(no subject)',
+              from: parsed.from?.text || '(unknown)',
+              messageId: parsed.messageId || '(missing)',
+              date: parsed.date || '(no date)',
               to: parsed.to?.text || '(none)',
               cc: parsed.cc?.text || '(none)',
               hasText: !!parsed.text,
               hasHtml: !!parsed.html,
               textLength: parsed.text?.length || 0,
-              htmlLength: parsed.html?.length || 0
+              htmlLength: parsed.html?.length || 0,
+              folder,
+              sessionId
             });
 
             // Generate message_id if missing (some emails don't have one)
             const messageId = parsed.messageId || `imported-${Date.now()}-${uid}@${imapConfig.host}`;
 
             if (!parsed.messageId) {
-              console.log(`     ⚠️  No Message-ID header, generated: ${messageId}`);
+              logger.warn('Message imported without Message-ID; generated fallback', { uid, messageId, folder, sessionId });
               await this.saveDebugEmail(uid, fullContent, 'no-message-id');
             }
 
@@ -537,7 +587,7 @@ class ReceiverService extends EventEmitter {
             });
 
             if (existing) {
-              console.log(`     ⏭️  Already exists, skipping`);
+              logger.debug('Message already exists, skipping', { uid, messageId, folder, sessionId });
               skipped++;
               continue;
             }
@@ -553,18 +603,23 @@ class ReceiverService extends EventEmitter {
               body_text: parsed.text || '',
               body_html: parsed.html || '',
               received_date: parsed.date || new Date(),
-              folder: 'INBOX',
+              folder: folder, // Use the actual folder being imported
               is_read: false,
               is_starred: false
             });
 
             const textPreview = (parsed.text || parsed.html || '').substring(0, 100).replace(/\n/g, ' ');
-            console.log(`     ✅ Imported! Preview: ${textPreview}${textPreview.length >= 100 ? '...' : ''}`);
+            logger.debug('Message imported', { uid, preview: `${textPreview}${textPreview.length >= 100 ? '...' : ''}`, folder, sessionId });
             imported++;
           } catch (emailError) {
-            console.error(`  ⚠️  Failed to import message UID ${uid}:`, emailError.message);
-            console.error(`     Error type: ${emailError.name}`);
-            console.error(`     Stack trace:`, emailError.stack?.split('\n').slice(0, 3).join('\n     '));
+            logger.error('Failed to import message', {
+              uid,
+              error: emailError.message,
+              errorType: emailError.name,
+              stack: emailError.stack?.split('\n').slice(0, 3).join('\n'),
+              folder,
+              sessionId
+            });
 
             // Save raw content for debugging
             if (fullContent) {
@@ -573,14 +628,17 @@ class ReceiverService extends EventEmitter {
 
             // Log parsed data if available
             if (parsed) {
-              console.error(`     📋 Parsed content:`, {
+              logger.debug('Parsed content available after import failure', {
                 messageId: parsed.messageId || '(missing)',
                 subject: parsed.subject || '(no subject)',
                 from: parsed.from?.text || '(unknown)',
                 to: parsed.to?.text || '(none)',
                 date: parsed.date || '(no date)',
                 hasText: !!parsed.text,
-                hasHtml: !!parsed.html
+                hasHtml: !!parsed.html,
+                uid,
+                folder,
+                sessionId
               });
             }
 
@@ -593,7 +651,7 @@ class ReceiverService extends EventEmitter {
 
         // Check for cancellation after each batch
         if (this.shouldStopImport(sessionId)) {
-          console.log(`🛑 Import cancelled by user after batch ${batchNum}`);
+          logger.warn('Import cancelled after batch', { batch: batchNum, totalBatches, folder, sessionId });
           this.emitLog(sessionId, 'warning', `🛑 Import stopped after batch ${batchNum}/${totalBatches}`);
           connection.end();
           return {
@@ -607,7 +665,7 @@ class ReceiverService extends EventEmitter {
 
       connection.end();
 
-      console.log(`✅ Import complete: ${imported} imported, ${skipped} skipped`);
+      logger.info('Folder import complete', { folder, imported, skipped, total: searchResults.length, sessionId });
 
       return {
         imported,
@@ -618,7 +676,7 @@ class ReceiverService extends EventEmitter {
     } catch (error) {
       if (progressInterval) clearInterval(progressInterval);
       if (connection) connection.end();
-      console.error('❌ Error importing emails:', error);
+      logger.error('Error importing emails', { error: error.message, folder, sessionId, host: imapConfig.host });
       this.emitLog(sessionId, 'error', `Import error: ${error.message}`);
       throw error;
     }

@@ -10,11 +10,26 @@ require('dotenv').config();
 const { testConnection } = require('./config/database');
 const { initializeDatabase } = require('./utils/migrationRunner');
 const smtpListener = require('./services/smtp-listener');
+const { logger } = require('./middleware/errorHandler');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const SMTP_PORTS = (process.env.SMTP_PORTS || '25,587,465')
   .split(',').map(p => parseInt(p.trim()));
+const isProduction = process.env.NODE_ENV === 'production';
+
+function getSessionSecret() {
+  if (process.env.SESSION_SECRET) {
+    return process.env.SESSION_SECRET;
+  }
+
+  if (isProduction) {
+    throw new Error('SESSION_SECRET is required in production');
+  }
+
+  logger.warn('SESSION_SECRET is not set; using an in-memory development fallback');
+  return 'development-only-session-secret';
+}
 
 // Trust proxy - important for HAProxy/reverse proxy setups
 if (process.env.TRUST_PROXY === 'true') {
@@ -36,7 +51,7 @@ const redisClient = createClient({
   socket: {
     reconnectStrategy: (retries) => {
       if (retries > 10) {
-        console.error('❌ Redis reconnection failed after 10 attempts');
+        logger.error('Redis reconnection failed after 10 attempts');
         return new Error('Redis reconnection failed');
       }
       return retries * 100; // Exponential backoff
@@ -44,15 +59,9 @@ const redisClient = createClient({
   }
 });
 
-redisClient.on('error', (err) => console.error('❌ Redis Client Error:', err));
-redisClient.on('connect', () => console.log('🔗 Redis client connecting...'));
-redisClient.on('ready', () => console.log('✅ Redis client connected and ready'));
-
-// Connect to Redis (async operation, but session middleware will wait)
-redisClient.connect().catch(err => {
-  console.error('❌ Failed to connect to Redis:', err);
-  process.exit(1);
-});
+redisClient.on('error', (err) => logger.error('Redis client error', { error: err.message }));
+redisClient.on('connect', () => logger.info('Redis client connecting'));
+redisClient.on('ready', () => logger.info('Redis client connected and ready'));
 
 // Session configuration
 app.use(session({
@@ -61,12 +70,12 @@ app.use(session({
     prefix: 'mailler:sess:',
     ttl: 24 * 60 * 60 // 24 hours in seconds
   }),
-  secret: process.env.SESSION_SECRET || 'your-secret-key',
+  secret: getSessionSecret(),
   resave: false,
   saveUninitialized: false,
   proxy: process.env.TRUST_PROXY === 'true',
   cookie: {
-    secure: process.env.NODE_ENV === 'production' || process.env.TRUST_PROXY === 'true',
+    secure: isProduction || process.env.TRUST_PROXY === 'true',
     httpOnly: true,
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
     sameSite: 'lax',
@@ -85,27 +94,27 @@ app.use((req, res, next) => {
     return next();
   }
 
-  const timestamp = new Date().toISOString();
-  console.log(`[${timestamp}] ${req.method} ${req.originalUrl}`);
+  logger.debug('Incoming request', {
+    method: req.method,
+    url: req.originalUrl,
+    authenticated: req.isAuthenticated()
+  });
 
   // Log query params if present
   if (Object.keys(req.query).length > 0) {
-    console.log('  Query:', JSON.stringify(req.query));
+    logger.debug('Request query', { query: req.query });
   }
 
   // Log body for POST/PUT requests (but hide passwords)
-  if ((req.method === 'POST' || req.method === 'PUT') && req.body) {
+  if ((req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') && req.body) {
     const sanitizedBody = { ...req.body };
-    if (sanitizedBody.password) sanitizedBody.password = '***';
-    console.log('  Body:', JSON.stringify(sanitizedBody));
+    ['password', 'imap_password', 'smtp_password'].forEach((field) => {
+      if (sanitizedBody[field]) {
+        sanitizedBody[field] = '***';
+      }
+    });
+    logger.debug('Request body', { body: sanitizedBody });
   }
-
-  // Log authentication status
-  console.log('  Authenticated:', req.isAuthenticated());
-  if (req.isAuthenticated()) {
-    console.log('  User:', req.user?.email || req.user?.id);
-  }
-  console.log('  Session ID:', req.sessionID);
 
   next();
 });
@@ -142,6 +151,8 @@ app.use(errorHandler);
 // Start server
 async function start() {
   try {
+    await redisClient.connect();
+
     // Initialize database and run migrations (similar to EF Core)
     if (process.env.AUTO_MIGRATE !== 'false') {
       await initializeDatabase();
@@ -150,20 +161,25 @@ async function start() {
     await testConnection();
 
     app.listen(PORT, () => {
-      console.log(`Mailler backend running on port ${PORT}`);
-      console.log(`Environment: ${process.env.NODE_ENV}`);
+      logger.info('Mailler backend running', {
+        port: PORT,
+        environment: process.env.NODE_ENV || 'development'
+      });
     });
 
     // Start SMTP servers for receiving emails on multiple ports
     smtpListener.startMultiple(SMTP_PORTS);
   } catch (error) {
-    console.error('Failed to start server:', error);
+    logger.error('Failed to start server', { error: error.message, stack: error.stack });
     process.exit(1);
   }
 }
 
-start();
+if (require.main === module) {
+  start();
+}
 
 module.exports = app;
-
-module.exports = app;
+module.exports.app = app;
+module.exports.start = start;
+module.exports.redisClient = redisClient;
