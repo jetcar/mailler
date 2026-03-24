@@ -39,10 +39,7 @@ mailler/
 ├── database/             # SQL migrations (auto-applied)
 ├── docker-compose.yml    # Docker orchestration
 ├── setup.sh              # Automated setup script (Bash)
-├── setup.ps1             # Automated setup script (PowerShell)
-├── MIGRATIONS.md         # Migration system documentation
-├── EMAIL_TESTING.md      # Email testing guide
-└── OIDC_PROVIDER_SETUP.md  # OIDC Provider OIDC setup guide
+└── setup.ps1             # Automated setup script (PowerShell)
 ```
 
 ## 🚀 Quick Start
@@ -72,8 +69,7 @@ The setup script will:
 
 - Node.js 16+
 - PostgreSQL 13+
-- OIDC provider account (OIDC provider, Auth0, Keycloak, Okta, Google, etc.)
-  - **Recommended:** [OIDC provider](https://your-oidc-provider.example.com) - see [OIDC_PROVIDER_SETUP.md](OIDC_PROVIDER_SETUP.md)
+- OIDC provider account (Auth0, Keycloak, Okta, Google, or another standards-compliant provider)
 
 #### 2. Backend Setup
 
@@ -100,8 +96,6 @@ npm run migrate
 npm run dev  # Database is created and migrations applied automatically!
 ```
 
-See [MIGRATIONS.md](MIGRATIONS.md) for detailed migration documentation.
-
 #### 4. Frontend Setup
 
 ```bash
@@ -125,22 +119,10 @@ npm run dev
 
 Visit **http://localhost:5173**
 
-### Option 3: Docker Compose (Recommended for Development)
+### Option 3: Docker Compose
 
-Everything in one command with hot-reload support!
+Run the full stack with Docker Compose:
 
-**Windows (PowerShell):**
-```powershell
-.\start-docker.ps1
-```
-
-**Linux/Mac (Bash):**
-```bash
-chmod +x start-docker.sh
-./start-docker.sh
-```
-
-Or manually:
 ```bash
 # 1. Generate SSL certificate
 .\generate-cert.ps1
@@ -161,8 +143,6 @@ Access at: **https://localhost**
 - ✅ HTTPS with HAProxy
 - ✅ Auto database migrations
 - ✅ All services in one command
-
-**See [DOCKER_SETUP.md](DOCKER_SETUP.md) for complete guide**
 
 ### Option 4: Production Docker Deployment
 
@@ -416,8 +396,6 @@ Check your inbox to verify the test emails!
    npm run dev
    ```
 
-See [MIGRATIONS.md](MIGRATIONS.md) for complete migration documentation.
-
 ### Available npm Scripts
 
 **Backend:**
@@ -443,13 +421,9 @@ npm run preview    # Preview production build
 - OIDC handles all user authentication
 - Follow RESTful API conventions
 
-## � Documentation
-- **[DOCKER_SETUP.md](DOCKER_SETUP.md)** - Complete Docker Compose guide with hot-reload
-- **[HAPROXY_SETUP.md](HAPROXY_SETUP.md)** - HAProxy reverse proxy setup with HTTPS- **[OIDC_PROVIDER_SETUP.md](OIDC_PROVIDER_SETUP.md)** - Complete guide for setting up OIDC provider OIDC authentication
-- **[EMAIL_TESTING.md](EMAIL_TESTING.md)** - How to test email sending and receiving functionality
-- **[MIGRATIONS.md](MIGRATIONS.md)** - Database migration system documentation
-- **[QUICKSTART.md](QUICKSTART.md)** - Quick start guide (if you want to get running fast)
-- **[IMPLEMENTATION.md](IMPLEMENTATION.md)** - Implementation status and features
+## Documentation
+
+This README is the single source of truth for setup, configuration, local development, Docker usage, testing, and troubleshooting.
 
 ## 🛠️ Troubleshooting
 
@@ -458,14 +432,13 @@ npm run preview    # Preview production build
 - Check OIDC configuration in `.env`
 - Verify callback URL matches OIDC provider settings
 - Check browser console for errors
-- **See [OIDC_PROVIDER_SETUP.md](OIDC_PROVIDER_SETUP.md)** for OIDC provider specific troubleshooting
+- Verify the provider callback and logout URLs exactly match the values shown in this README
 
 ### Can't Send Emails
 
 - Verify SMTP credentials in Settings
 - For Gmail, ensure you're using an App Password, not regular password
 - Check SMTP port (587 for STARTTLS, 465 for SSL)
-- **See [EMAIL_TESTING.md](EMAIL_TESTING.md)** for detailed email testing instructions
 
 ### Can't Receive Emails
 
