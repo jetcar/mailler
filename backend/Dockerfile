@@ -1,12 +1,23 @@
-FROM node:18-alpine
+FROM node:18-alpine AS frontend-builder
+
+WORKDIR /frontend
+
+COPY frontend/package*.json ./
+RUN npm ci
+
+COPY frontend/ ./
+RUN npm run build
+
+FROM node:18-alpine AS backend-runtime
 
 WORKDIR /app
 
-COPY package*.json ./
+COPY backend/package*.json ./
+RUN npm ci --omit=dev
 
-RUN npm ci --only=production
-
-COPY . .
+COPY backend/ ./
+COPY database/ ./database
+COPY --from=frontend-builder /frontend/dist ./public
 
 EXPOSE 3000
 

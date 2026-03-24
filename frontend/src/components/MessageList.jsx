@@ -75,7 +75,7 @@ export default function MessageList() {
                         </span>
                     </label>
                     {selectedMessageIds.size > 0 && (
-                        <button style={{ ...styles.button, backgroundColor: '#dc3545', marginLeft: '1rem' }} onClick={handleDeleteSelected}>
+                        <button style={{ ...styles.buttonDanger, marginLeft: '1rem' }} onClick={handleDeleteSelected}>
                             🗑️ Delete ({selectedMessageIds.size})
                         </button>
                     )}
@@ -99,8 +99,8 @@ export default function MessageList() {
                         <li
                             key={msg.id}
                             style={{ ...styles.item, ...(msg.is_read ? {} : styles.unread) }}
-                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
-                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = msg.is_read ? 'white' : '#f0f8ff'}
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-surface-soft)'}
+                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = msg.is_read ? 'var(--bg-surface)' : 'var(--bg-accent-soft)'}
                         >
                             <input
                                 type="checkbox"
@@ -129,32 +129,33 @@ const styles = {
         justifyContent: 'space-between',
         alignItems: 'center',
         padding: '1rem 2rem',
-        borderBottom: '2px solid #ddd',
-        backgroundColor: '#fff',
+        borderBottom: '1px solid var(--border-soft)',
+        backgroundColor: 'var(--bg-surface)',
         position: 'sticky',
         top: 0,
         zIndex: 10
     },
     headerLeft: { display: 'flex', alignItems: 'center' },
-    selectAllLabel: { display: 'flex', alignItems: 'center', cursor: 'pointer', fontSize: '1.1rem', fontWeight: 'bold' },
+    selectAllLabel: { display: 'flex', alignItems: 'center', cursor: 'pointer', fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--text-strong)' },
     pagination: { display: 'flex', alignItems: 'center', gap: '0.5rem' },
-    pageInfo: { fontSize: '0.9rem', fontWeight: '500', color: '#333' },
-    pageBtn: { backgroundColor: '#007bff', color: 'white', border: 'none', padding: '0.5rem 1rem', borderRadius: '4px', cursor: 'pointer', fontSize: '0.9rem' },
-    pageBtnDisabled: { backgroundColor: '#ccc', cursor: 'not-allowed', opacity: 0.6 },
+    pageInfo: { fontSize: '0.9rem', fontWeight: '500', color: 'var(--text-body)' },
+    pageBtn: { backgroundColor: 'var(--accent)', color: 'var(--text-on-accent)', border: '1px solid var(--accent)', padding: '0.5rem 1rem', borderRadius: '8px', cursor: 'pointer', fontSize: '0.9rem' },
+    pageBtnDisabled: { backgroundColor: 'var(--border-strong)', borderColor: 'var(--border-strong)', cursor: 'not-allowed', opacity: 0.7 },
     list: { listStyle: 'none', padding: 0, margin: 0 },
     item: {
         padding: '1rem 2rem',
-        borderBottom: '1px solid #eee',
+        borderBottom: '1px solid var(--border-soft)',
         display: 'flex',
         alignItems: 'flex-start',
-        transition: 'background-color 0.2s'
+        transition: 'background-color 0.2s',
+        backgroundColor: 'var(--bg-surface)'
     },
-    unread: { fontWeight: 'bold', backgroundColor: '#f0f8ff' },
+    unread: { fontWeight: 'bold', backgroundColor: 'var(--bg-accent-soft)' },
     checkbox: { marginRight: '0.75rem', width: '18px', height: '18px', cursor: 'pointer', flexShrink: 0 },
     itemContent: { flex: 1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '1rem' },
-    from: { fontSize: '0.95rem', color: '#333', minWidth: '250px', fontWeight: '500', pointerEvents: 'none' },
-    subject: { fontSize: '1rem', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', pointerEvents: 'none' },
-    date: { fontSize: '0.85rem', color: '#999', minWidth: '120px', textAlign: 'right', pointerEvents: 'none' },
-    button: { backgroundColor: 'white', color: '#007bff', border: 'none', padding: '0.5rem 1rem', borderRadius: '4px', cursor: 'pointer' },
-    empty: { display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, color: '#999' }
+    from: { fontSize: '0.95rem', color: 'var(--text-strong)', minWidth: '250px', fontWeight: '500', pointerEvents: 'none' },
+    subject: { fontSize: '1rem', color: 'var(--text-body)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', pointerEvents: 'none' },
+    date: { fontSize: '0.85rem', color: 'var(--text-muted)', minWidth: '120px', textAlign: 'right', pointerEvents: 'none' },
+    buttonDanger: { backgroundColor: 'var(--danger)', color: 'var(--text-on-accent)', border: '1px solid var(--danger)', padding: '0.5rem 1rem', borderRadius: '8px', cursor: 'pointer' },
+    empty: { display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, color: 'var(--text-muted)' }
 };

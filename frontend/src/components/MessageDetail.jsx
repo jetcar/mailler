@@ -79,13 +79,13 @@ export default function MessageDetail() {
 }
 
 const styles = {
-    container: { padding: '2rem', overflowY: 'auto', height: '100%', boxSizing: 'border-box' },
-    toolbar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '2px solid #eee' },
-    backBtn: { backgroundColor: 'white', color: '#007bff', border: '1px solid #007bff', padding: '0.5rem 1rem', borderRadius: '4px', cursor: 'pointer' },
-    deleteBtn: { backgroundColor: '#dc3545', color: 'white', border: 'none', padding: '0.5rem 1rem', borderRadius: '4px', cursor: 'pointer' },
-    subject: { margin: '0 0 1rem 0', fontSize: '1.4rem' },
-    meta: { backgroundColor: '#f5f5f5', padding: '1rem', borderRadius: '4px', marginBottom: '1rem', fontSize: '0.9rem', lineHeight: '1.8' },
-    body: { lineHeight: '1.6' },
-    bodyText: { whiteSpace: 'pre-wrap', fontFamily: 'inherit' },
-    placeholder: { display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#999', fontSize: '1.1rem' }
+    container: { padding: '2rem', overflowY: 'auto', height: '100%', boxSizing: 'border-box', backgroundColor: 'var(--bg-app)' },
+    toolbar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid var(--border-soft)' },
+    backBtn: { backgroundColor: 'var(--bg-surface)', color: 'var(--accent)', border: '1px solid var(--border-soft)', padding: '0.5rem 1rem', borderRadius: '8px', cursor: 'pointer' },
+    deleteBtn: { backgroundColor: 'var(--danger)', color: 'var(--text-on-accent)', border: '1px solid var(--danger)', padding: '0.5rem 1rem', borderRadius: '8px', cursor: 'pointer' },
+    subject: { margin: '0 0 1rem 0', fontSize: '1.4rem', color: 'var(--text-strong)' },
+    meta: { backgroundColor: 'var(--bg-surface-soft)', padding: '1rem', borderRadius: '12px', marginBottom: '1rem', fontSize: '0.9rem', lineHeight: '1.8', border: '1px solid var(--border-soft)', color: 'var(--text-body)' },
+    body: { lineHeight: '1.6', color: 'var(--text-body)' },
+    bodyText: { whiteSpace: 'pre-wrap', fontFamily: 'inherit', color: 'var(--text-body)' },
+    placeholder: { display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)', fontSize: '1.1rem' }
 };

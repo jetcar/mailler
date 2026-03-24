@@ -144,22 +144,22 @@ export default function Settings() {
 const styles = {
   container: { height: '100vh', display: 'flex', flexDirection: 'column' },
   header: {
-    backgroundColor: '#007bff',
-    color: 'white',
+    backgroundColor: 'var(--accent)',
+    color: 'var(--text-on-accent)',
     padding: '1rem 2rem',
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center'
   },
   button: {
-    backgroundColor: 'white',
-    color: '#007bff',
-    border: 'none',
+    backgroundColor: 'var(--bg-surface)',
+    color: 'var(--accent)',
+    border: '1px solid rgba(255, 255, 255, 0.45)',
     padding: '0.5rem 1rem',
-    borderRadius: '4px',
+    borderRadius: '8px',
     cursor: 'pointer'
   },
-  main: { flex: 1, padding: '2rem', overflowY: 'auto', backgroundColor: '#f9f9f9' },
+  main: { flex: 1, padding: '2rem', overflowY: 'auto', backgroundColor: 'var(--bg-app)' },
   section: {
     maxWidth: '900px',
     margin: '0 auto'
@@ -171,23 +171,24 @@ const styles = {
     marginBottom: '2rem'
   },
   addButton: {
-    backgroundColor: '#28a745',
-    color: 'white',
-    border: 'none',
+    backgroundColor: 'var(--success)',
+    color: 'var(--text-on-accent)',
+    border: '1px solid var(--success)',
     padding: '0.5rem 1rem',
-    borderRadius: '4px',
+    borderRadius: '8px',
     cursor: 'pointer'
   },
   form: {
-    backgroundColor: 'white',
+    backgroundColor: 'var(--bg-surface)',
     padding: '2rem',
-    borderRadius: '8px',
+    borderRadius: '12px',
     marginBottom: '2rem',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+    boxShadow: 'var(--shadow-soft)',
+    border: '1px solid var(--border-soft)'
   },
   helpText: {
     margin: '0 0 1.5rem 0',
-    color: '#666',
+    color: 'var(--text-muted)',
     lineHeight: '1.5'
   },
   formRow: {
@@ -199,14 +200,17 @@ const styles = {
     display: 'block',
     marginBottom: '0.5rem',
     fontWeight: 'bold',
-    fontSize: '0.9rem'
+    fontSize: '0.9rem',
+    color: 'var(--text-strong)'
   },
   input: {
     width: '100%',
     padding: '0.5rem',
-    border: '1px solid #ddd',
-    borderRadius: '4px',
+    border: '1px solid var(--border-soft)',
+    borderRadius: '8px',
     fontSize: '1rem',
+    backgroundColor: 'var(--bg-surface)',
+    color: 'var(--text-body)',
     boxSizing: 'border-box'
   },
   checkboxField: {
@@ -215,14 +219,15 @@ const styles = {
   },
   checkboxLabel: {
     marginLeft: '0.5rem',
-    fontSize: '0.9rem'
+    fontSize: '0.9rem',
+    color: 'var(--text-body)'
   },
   submitButton: {
-    backgroundColor: '#007bff',
-    color: 'white',
-    border: 'none',
+    backgroundColor: 'var(--accent)',
+    color: 'var(--text-on-accent)',
+    border: '1px solid var(--accent)',
     padding: '0.75rem 2rem',
-    borderRadius: '4px',
+    borderRadius: '8px',
     cursor: 'pointer',
     fontSize: '1rem'
   },
@@ -231,10 +236,11 @@ const styles = {
     gap: '1rem'
   },
   accountCard: {
-    backgroundColor: 'white',
+    backgroundColor: 'var(--bg-surface)',
     padding: '1.5rem',
-    borderRadius: '8px',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+    borderRadius: '12px',
+    boxShadow: 'var(--shadow-soft)',
+    border: '1px solid var(--border-soft)',
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center'
@@ -242,28 +248,29 @@ const styles = {
   accountInfo: { flex: 1 },
   accountDetails: {
     fontSize: '0.9rem',
-    color: '#666',
+    color: 'var(--text-muted)',
     margin: '0.5rem 0 0 0'
   },
   badge: {
-    backgroundColor: '#28a745',
-    color: 'white',
+    backgroundColor: 'var(--bg-success-soft)',
+    color: 'var(--success)',
     padding: '0.25rem 0.5rem',
-    borderRadius: '4px',
+    borderRadius: '999px',
     fontSize: '0.75rem',
-    marginLeft: '1rem'
+    marginLeft: '1rem',
+    border: '1px solid rgba(47, 122, 92, 0.18)'
   },
   deleteButton: {
-    backgroundColor: '#dc3545',
-    color: 'white',
-    border: 'none',
+    backgroundColor: 'var(--danger)',
+    color: 'var(--text-on-accent)',
+    border: '1px solid var(--danger)',
     padding: '0.5rem 1rem',
-    borderRadius: '4px',
+    borderRadius: '8px',
     cursor: 'pointer'
   },
   empty: {
     textAlign: 'center',
-    color: '#999',
+    color: 'var(--text-muted)',
     padding: '2rem'
   }
 };

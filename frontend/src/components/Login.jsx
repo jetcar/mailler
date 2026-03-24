@@ -59,34 +59,35 @@ const styles = {
     justifyContent: 'center',
     alignItems: 'center',
     minHeight: '100vh',
-    backgroundColor: '#f5f5f5'
+    background: 'radial-gradient(circle at top, var(--bg-accent-soft), var(--bg-app) 45%)'
   },
   card: {
-    backgroundColor: 'white',
+    backgroundColor: 'var(--bg-surface)',
     padding: '3rem',
-    borderRadius: '8px',
-    boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
+    borderRadius: '12px',
+    boxShadow: 'var(--shadow-card)',
     textAlign: 'center',
-    maxWidth: '400px'
+    maxWidth: '400px',
+    border: '1px solid var(--border-soft)'
   },
   title: {
     fontSize: '2.5rem',
     margin: '0 0 1rem 0',
-    color: '#333'
+    color: 'var(--text-strong)'
   },
   subtitle: {
     fontSize: '1.1rem',
-    color: '#666',
+    color: 'var(--text-muted)',
     marginBottom: '2rem'
   },
   button: {
-    backgroundColor: '#007bff',
-    color: 'white',
-    border: 'none',
+    backgroundColor: 'var(--accent)',
+    color: 'var(--text-on-accent)',
+    border: '1px solid var(--accent)',
     padding: '0.75rem 2rem',
     fontSize: '1rem',
-    borderRadius: '4px',
+    borderRadius: '8px',
     cursor: 'pointer',
-    transition: 'background-color 0.2s'
+    transition: 'background-color 0.2s, border-color 0.2s'
   }
 };

@@ -1,4 +1,6 @@
 const express = require('express');
+const fs = require('fs');
+const path = require('path');
 const helmet = require('helmet');
 const cors = require('cors');
 const session = require('express-session');
@@ -17,6 +19,13 @@ const PORT = process.env.PORT || 3000;
 const SMTP_PORTS = (process.env.SMTP_PORTS || '25,587,465')
   .split(',').map(p => parseInt(p.trim()));
 const isProduction = process.env.NODE_ENV === 'production';
+const redisUrl = process.env.REDIS_URL || 'redis://redis:6379';
+const frontendBuildPath = path.resolve(__dirname, '../public');
+const frontendIndexPath = path.join(frontendBuildPath, 'index.html');
+
+let redisClient = null;
+let sessionConfigured = false;
+let runtimeConfigured = false;
 
 function getSessionSecret() {
   if (process.env.SESSION_SECRET) {
@@ -45,113 +54,174 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Initialize Redis client for sessions
-const redisClient = createClient({
-  url: process.env.REDIS_URL || 'redis://redis:6379',
-  socket: {
-    reconnectStrategy: (retries) => {
-      if (retries > 10) {
-        logger.error('Redis reconnection failed after 10 attempts');
-        return new Error('Redis reconnection failed');
+function createRedisClient() {
+  const client = createClient({
+    url: redisUrl,
+    socket: {
+      reconnectStrategy: (retries) => {
+        if (retries > 10) {
+          logger.error('Redis reconnection failed after 10 attempts');
+          return new Error('Redis reconnection failed');
+        }
+
+        return retries * 100;
       }
-      return retries * 100; // Exponential backoff
     }
-  }
-});
-
-redisClient.on('error', (err) => logger.error('Redis client error', { error: err.message }));
-redisClient.on('connect', () => logger.info('Redis client connecting'));
-redisClient.on('ready', () => logger.info('Redis client connected and ready'));
-
-// Session configuration
-app.use(session({
-  store: new RedisStore({
-    client: redisClient,
-    prefix: 'mailler:sess:',
-    ttl: 24 * 60 * 60 // 24 hours in seconds
-  }),
-  secret: getSessionSecret(),
-  resave: false,
-  saveUninitialized: false,
-  proxy: process.env.TRUST_PROXY === 'true',
-  cookie: {
-    secure: isProduction || process.env.TRUST_PROXY === 'true',
-    httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    sameSite: 'lax',
-    path: '/'
-  }
-}));
-
-// Passport initialization (uses openid-client with signature validation)
-app.use(passport.initialize());
-app.use(passport.session());
-
-// Request logging middleware - log all incoming requests (except health checks)
-app.use((req, res, next) => {
-  // Skip logging health check requests
-  if (req.originalUrl === '/health' || req.originalUrl.endsWith('/health')) {
-    return next();
-  }
-
-  logger.debug('Incoming request', {
-    method: req.method,
-    url: req.originalUrl,
-    authenticated: req.isAuthenticated()
   });
 
-  // Log query params if present
-  if (Object.keys(req.query).length > 0) {
-    logger.debug('Request query', { query: req.query });
-  }
+  client.on('error', (err) => logger.error('Redis client error', { error: err.message }));
+  client.on('connect', () => logger.info('Redis client connecting', { url: redisUrl }));
+  client.on('ready', () => logger.info('Redis client connected and ready'));
 
-  // Log body for POST/PUT requests (but hide passwords)
-  if ((req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') && req.body) {
-    const sanitizedBody = { ...req.body };
-    ['password', 'imap_password', 'smtp_password'].forEach((field) => {
-      if (sanitizedBody[field]) {
-        sanitizedBody[field] = '***';
-      }
+  return client;
+}
+
+async function resolveSessionStore() {
+  const client = createRedisClient();
+
+  try {
+    await client.connect();
+    redisClient = client;
+
+    return new RedisStore({
+      client,
+      prefix: 'mailler:sess:',
+      ttl: 24 * 60 * 60
     });
-    logger.debug('Request body', { body: sanitizedBody });
+  } catch (error) {
+    try {
+      if (client.isOpen) {
+        await client.quit();
+      }
+    } catch (closeError) {
+      logger.warn('Failed to close Redis client after connection error', { error: closeError.message });
+    }
+
+    if (isProduction) {
+      throw new Error(`Redis is required in production: ${error.message}`);
+    }
+
+    logger.warn('Redis unavailable; using in-memory session store', {
+      redisUrl,
+      error: error.message
+    });
+
+    return null;
+  }
+}
+
+function configureSession(store) {
+  if (sessionConfigured) {
+    return;
   }
 
-  next();
-});
+  const sessionOptions = {
+    secret: getSessionSecret(),
+    resave: false,
+    saveUninitialized: false,
+    proxy: process.env.TRUST_PROXY === 'true',
+    cookie: {
+      secure: isProduction || process.env.TRUST_PROXY === 'true',
+      httpOnly: true,
+      maxAge: 24 * 60 * 60 * 1000,
+      sameSite: 'lax',
+      path: '/'
+    }
+  };
 
-// Routes
-app.get('/', (req, res) => {
-  res.json({
-    message: 'Mailler API',
-    version: '1.0.0',
-    authenticated: req.isAuthenticated()
+  if (store) {
+    sessionOptions.store = store;
+  } else if (!isProduction) {
+    logger.warn('Using express-session MemoryStore; sessions will reset on restart');
+  }
+
+  app.use(session(sessionOptions));
+  sessionConfigured = true;
+}
+
+function configureRuntime() {
+  if (runtimeConfigured) {
+    return;
+  }
+
+  app.use(passport.initialize());
+  app.use(passport.session());
+
+  app.use((req, res, next) => {
+    if (req.originalUrl === '/health' || req.originalUrl.endsWith('/health')) {
+      return next();
+    }
+
+    logger.debug('Incoming request', {
+      method: req.method,
+      url: req.originalUrl,
+      authenticated: req.isAuthenticated()
+    });
+
+    if (Object.keys(req.query).length > 0) {
+      logger.debug('Request query', { query: req.query });
+    }
+
+    if ((req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') && req.body) {
+      const sanitizedBody = { ...req.body };
+      ['password', 'imap_password', 'smtp_password'].forEach((field) => {
+        if (sanitizedBody[field]) {
+          sanitizedBody[field] = '***';
+        }
+      });
+      logger.debug('Request body', { body: sanitizedBody });
+    }
+
+    next();
   });
-});
 
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
+  const hasFrontendBuild = fs.existsSync(frontendIndexPath);
 
-// API Routes
-const authRoutes = require('./routes/auth');
-const messageRoutes = require('./routes/messages');
-const accountRoutes = require('./routes/accounts');
+  app.get('/health', (req, res) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
 
-app.use('/auth', authRoutes);
-app.use('/api/messages', messageRoutes);
-app.use('/api/accounts', accountRoutes);
+  const authRoutes = require('./routes/auth');
+  const messageRoutes = require('./routes/messages');
+  const accountRoutes = require('./routes/accounts');
 
-// Webmail OIDC callback route (mounted separately for HAProxy routing)
-app.use('/webmail', authRoutes);
+  app.use('/auth', authRoutes);
+  app.use('/api/messages', messageRoutes);
+  app.use('/api/accounts', accountRoutes);
+  app.use('/webmail', authRoutes);
 
-// Error handler
-const { errorHandler } = require('./middleware/errorHandler');
-app.use(errorHandler);
+  if (hasFrontendBuild) {
+    logger.info('Serving frontend build from backend', { frontendBuildPath });
+    app.use(express.static(frontendBuildPath));
+    app.get('*', (req, res, next) => {
+      if (req.path.startsWith('/api') || req.path.startsWith('/auth') || req.path === '/health') {
+        return next();
+      }
+
+      return res.sendFile(frontendIndexPath);
+    });
+  } else {
+    app.get('/', (req, res) => {
+      res.json({
+        message: 'Mailler API',
+        version: '1.0.0',
+        authenticated: req.isAuthenticated()
+      });
+    });
+  }
+
+  const { errorHandler } = require('./middleware/errorHandler');
+  app.use(errorHandler);
+
+  runtimeConfigured = true;
+}
 
 // Start server
 async function start() {
   try {
-    await redisClient.connect();
+    const sessionStore = await resolveSessionStore();
+    configureSession(sessionStore);
+    configureRuntime();
 
     // Initialize database and run migrations (similar to EF Core)
     if (process.env.AUTO_MIGRATE !== 'false') {
@@ -173,6 +243,11 @@ async function start() {
     logger.error('Failed to start server', { error: error.message, stack: error.stack });
     process.exit(1);
   }
+}
+
+if (require.main !== module) {
+  configureSession(null);
+  configureRuntime();
 }
 
 if (require.main === module) {

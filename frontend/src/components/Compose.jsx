@@ -151,62 +151,67 @@ export default function Compose() {
 const styles = {
   container: { height: '100vh', display: 'flex', flexDirection: 'column' },
   header: {
-    backgroundColor: '#007bff',
-    color: 'white',
+    backgroundColor: 'var(--accent)',
+    color: 'var(--text-on-accent)',
     padding: '1rem 2rem',
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center'
   },
   button: {
-    backgroundColor: 'white',
-    color: '#007bff',
-    border: 'none',
+    backgroundColor: 'var(--bg-surface)',
+    color: 'var(--accent)',
+    border: '1px solid rgba(255, 255, 255, 0.45)',
     padding: '0.5rem 1rem',
-    borderRadius: '4px',
+    borderRadius: '8px',
     cursor: 'pointer'
   },
-  main: { flex: 1, padding: '2rem', overflowY: 'auto', backgroundColor: '#f9f9f9' },
+  main: { flex: 1, padding: '2rem', overflowY: 'auto', backgroundColor: 'var(--bg-app)' },
   form: {
     maxWidth: '800px',
     margin: '0 auto',
-    backgroundColor: 'white',
+    backgroundColor: 'var(--bg-surface)',
     padding: '2rem',
-    borderRadius: '8px',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+    borderRadius: '12px',
+    boxShadow: 'var(--shadow-soft)',
+    border: '1px solid var(--border-soft)'
   },
   field: { marginBottom: '1.5rem' },
   label: {
     display: 'block',
     marginBottom: '0.5rem',
     fontWeight: 'bold',
-    color: '#333'
+    color: 'var(--text-strong)'
   },
   input: {
     width: '100%',
     padding: '0.75rem',
     fontSize: '1rem',
-    border: '1px solid #ddd',
-    borderRadius: '4px',
+    border: '1px solid var(--border-soft)',
+    borderRadius: '8px',
+    backgroundColor: 'var(--bg-surface)',
+    color: 'var(--text-body)',
     boxSizing: 'border-box'
   },
   textarea: {
     width: '100%',
     padding: '0.75rem',
     fontSize: '1rem',
-    border: '1px solid #ddd',
-    borderRadius: '4px',
+    border: '1px solid var(--border-soft)',
+    borderRadius: '8px',
+    backgroundColor: 'var(--bg-surface)',
+    color: 'var(--text-body)',
     fontFamily: 'inherit',
     resize: 'vertical',
     boxSizing: 'border-box'
   },
   submitButton: {
-    backgroundColor: '#28a745',
-    color: 'white',
-    border: 'none',
+    backgroundColor: 'var(--success)',
+    color: 'var(--text-on-accent)',
+    border: '1px solid var(--success)',
     padding: '0.75rem 2rem',
     fontSize: '1.1rem',
-    borderRadius: '4px',
+    borderRadius: '8px',
     cursor: 'pointer',
     width: '100%'
   }
