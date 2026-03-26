@@ -1,4 +1,4 @@
-FROM node:18-alpine AS frontend-builder
+FROM node:22-alpine AS frontend-builder
 
 WORKDIR /frontend
 
@@ -8,7 +8,7 @@ RUN npm ci
 COPY frontend/ ./
 RUN npm run build
 
-FROM node:18-alpine AS backend-runtime
+FROM node:22-alpine AS backend-runtime
 
 WORKDIR /app
 
