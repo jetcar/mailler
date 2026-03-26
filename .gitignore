@@ -8,6 +8,8 @@ yarn-error.log*
 .env
 .env.local
 .env.*.local
+.env.docker
+.env.test
 backend/.env
 backend/.env.local
 backend/.env.*.local

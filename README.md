@@ -468,6 +468,9 @@ Current features are complete and working! Future enhancements could include:
 - [ ] Spam detection
 - [ ] Contact management
 - [ ] Calendar integration
+- [ ] automation rules
+- [ ] AI agent for emails manipulations
+- [ ] email encrypt/decrypt using passi app user keys
 
 ## License
 
