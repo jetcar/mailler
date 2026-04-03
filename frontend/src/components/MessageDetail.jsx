@@ -18,8 +18,12 @@ export default function MessageDetail() {
         if (cached) setMessage(cached);
 
         messagesAPI.get(numericMessageId).then(res => {
-            setMessage(res.data.message);
-            if (!res.data.message.is_read) {
+            const nextMessage = res.data.message;
+            const shouldMarkRead = Boolean(cached && !cached.is_read) || !nextMessage.is_read;
+
+            setMessage(nextMessage);
+
+            if (shouldMarkRead) {
                 onMarkRead(numericMessageId);
             }
         }).catch(err => logger.error('Failed to load message', { error: err }));

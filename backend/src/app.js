@@ -9,6 +9,7 @@ const { createClient } = require('redis');
 const { passport } = require('./config/passport');
 require('dotenv').config();
 
+const { appBasePath } = require('./config/appPaths');
 const { testConnection } = require('./config/database');
 const { initializeDatabase } = require('./utils/migrationRunner');
 const smtpListener = require('./services/smtp-listener');
@@ -26,6 +27,37 @@ const frontendIndexPath = path.join(frontendBuildPath, 'index.html');
 let redisClient = null;
 let sessionConfigured = false;
 let runtimeConfigured = false;
+
+function buildMountedPath(pathname) {
+  if (!appBasePath) {
+    return pathname;
+  }
+
+  return `${appBasePath}${pathname}`;
+}
+
+function isReservedRequestPath(requestPath) {
+  const reservedPrefixes = ['/api', '/auth', '/webmail'];
+  const reservedPaths = ['/health'];
+
+  if (reservedPaths.includes(requestPath)) {
+    return true;
+  }
+
+  if (reservedPrefixes.some((prefix) => requestPath.startsWith(prefix))) {
+    return true;
+  }
+
+  if (!appBasePath) {
+    return false;
+  }
+
+  if (requestPath === `${appBasePath}/health`) {
+    return true;
+  }
+
+  return reservedPrefixes.some((prefix) => requestPath.startsWith(`${appBasePath}${prefix}`));
+}
 
 function getSessionSecret() {
   if (process.env.SESSION_SECRET) {
@@ -181,6 +213,12 @@ function configureRuntime() {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
+  if (appBasePath) {
+    app.get(buildMountedPath('/health'), (req, res) => {
+      res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    });
+  }
+
   const authRoutes = require('./routes/auth');
   const messageRoutes = require('./routes/messages');
   const accountRoutes = require('./routes/accounts');
@@ -190,11 +228,27 @@ function configureRuntime() {
   app.use('/api/accounts', accountRoutes);
   app.use('/webmail', authRoutes);
 
+  if (appBasePath) {
+    app.use(buildMountedPath('/auth'), authRoutes);
+    app.use(buildMountedPath('/api/messages'), messageRoutes);
+    app.use(buildMountedPath('/api/accounts'), accountRoutes);
+    app.use(buildMountedPath('/webmail'), authRoutes);
+    app.use(appBasePath, authRoutes);
+  }
+
   if (hasFrontendBuild) {
     logger.info('Serving frontend build from backend', { frontendBuildPath });
     app.use(express.static(frontendBuildPath));
+
+    if (appBasePath) {
+      app.use(appBasePath, express.static(frontendBuildPath));
+      app.get(appBasePath, (req, res) => {
+        res.redirect(`${appBasePath}/`);
+      });
+    }
+
     app.get('*', (req, res, next) => {
-      if (req.path.startsWith('/api') || req.path.startsWith('/auth') || req.path === '/health') {
+      if (isReservedRequestPath(req.path)) {
         return next();
       }
 
@@ -208,6 +262,16 @@ function configureRuntime() {
         authenticated: req.isAuthenticated()
       });
     });
+
+    if (appBasePath) {
+      app.get(appBasePath, (req, res) => {
+        res.json({
+          message: 'Mailler API',
+          version: '1.0.0',
+          authenticated: req.isAuthenticated()
+        });
+      });
+    }
   }
 
   const { errorHandler } = require('./middleware/errorHandler');

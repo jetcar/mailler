@@ -1,8 +1,9 @@
 import axios from 'axios';
+import { buildAppPath, getApiBaseUrl, isAppPath, routerBasename } from '../config/appPaths';
 import { logger } from '../utils/logger';
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '',
+  baseURL: getApiBaseUrl(),
   withCredentials: true
 });
 
@@ -56,8 +57,15 @@ api.interceptors.response.use(
 
       if (error.response.status === 401) {
         logger.warn('Unauthorized response received; redirecting to login');
-        if (!window.location.pathname.includes('/auth/login') && window.location.pathname !== '/') {
-          window.location.assign('/');
+        const authLoginPath = buildAppPath('/auth/login');
+        const appLoginPaths = new Set([routerBasename, buildAppPath('/')]);
+
+        if (
+          !window.location.pathname.includes(authLoginPath) &&
+          !appLoginPaths.has(window.location.pathname) &&
+          isAppPath(window.location.pathname)
+        ) {
+          window.location.assign(routerBasename);
         }
       }
     } else if (error.request) {
@@ -74,32 +82,32 @@ api.interceptors.response.use(
 );
 
 export const authAPI = {
-  getMe: () => api.get('/auth/me'),
+  getMe: () => api.get('auth/me'),
   login: () => {
-    window.location.assign('/auth/login');
+    window.location.assign(buildAppPath('/auth/login'));
   },
-  logout: () => api.get('/auth/logout')
+  logout: () => api.get('auth/logout')
 };
 
 export const accountsAPI = {
-  getAll: () => api.get('/api/accounts'),
-  get: (id) => api.get(`/api/accounts/${id}`),
-  create: (data) => api.post('/api/accounts', data),
-  update: (id, data) => api.put(`/api/accounts/${id}`, data),
-  delete: (id) => api.delete(`/api/accounts/${id}`)
+  getAll: () => api.get('api/accounts'),
+  get: (id) => api.get(`api/accounts/${id}`),
+  create: (data) => api.post('api/accounts', data),
+  update: (id, data) => api.put(`api/accounts/${id}`, data),
+  delete: (id) => api.delete(`api/accounts/${id}`)
 };
 
 export const messagesAPI = {
-  getAll: (params) => api.get('/api/messages', { params }),
-  get: (id) => api.get(`/api/messages/${id}`),
-  send: (data) => api.post('/api/messages/send', data),
-  sync: (accountId) => api.post('/api/messages/sync', { account_id: accountId }),
-  import: (data) => api.post('/api/messages/import', data),
-  fetchFolders: (data) => api.post('/api/messages/import/folders', data),
-  importMulti: (data) => api.post('/api/messages/import/multi', data),
-  stopImport: (sessionId) => api.post(`/api/messages/import/stop/${sessionId}`),
-  update: (id, data) => api.patch(`/api/messages/${id}`, data),
-  delete: (id) => api.delete(`/api/messages/${id}`)
+  getAll: (params) => api.get('api/messages', { params }),
+  get: (id) => api.get(`api/messages/${id}`),
+  send: (data) => api.post('api/messages/send', data),
+  sync: (accountId) => api.post('api/messages/sync', { account_id: accountId }),
+  import: (data) => api.post('api/messages/import', data),
+  fetchFolders: (data) => api.post('api/messages/import/folders', data),
+  importMulti: (data) => api.post('api/messages/import/multi', data),
+  stopImport: (sessionId) => api.post(`api/messages/import/stop/${sessionId}`),
+  update: (id, data) => api.patch(`api/messages/${id}`, data),
+  delete: (id) => api.delete(`api/messages/${id}`)
 };
 
 export default api;

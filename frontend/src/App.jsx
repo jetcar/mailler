@@ -7,6 +7,7 @@ import MessageDetail from './components/MessageDetail';
 import Compose from './components/Compose';
 import Settings from './components/Settings';
 import './App.css';
+import { getApiBaseUrl, routerBasename } from './config/appPaths';
 import { logger } from './utils/logger';
 
 // Navigation logger component
@@ -28,12 +29,13 @@ export default function App() {
   useEffect(() => {
     logger.info('Application started', {
       environment: import.meta.env.MODE,
-      apiUrl: import.meta.env.VITE_API_URL || 'http://localhost:3000'
+      apiUrl: getApiBaseUrl(),
+      basename: routerBasename
     });
   }, []);
 
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={routerBasename}>
       <NavigationLogger />
       <Routes>
         <Route path="/" element={<Login />} />

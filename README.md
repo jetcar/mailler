@@ -117,7 +117,7 @@ cd frontend
 npm run dev
 ```
 
-Visit **http://localhost:5173**
+Visit **http://localhost:5173/mailler**
 
 ### Option 3: Docker Compose
 
@@ -125,17 +125,17 @@ Run the full stack with Docker Compose:
 
 ```bash
 # 1. Generate SSL certificate
-.\generate-cert.ps1
+bash ./generate-cert.sh
 
-# 2. Create environment file
-cp .env.docker .env
-# Edit .env with your credentials
+# 2. Create Docker/test environment file
+cp .env.example .env.test
+# Edit .env.test with your credentials
 
 # 3. Start everything
 docker-compose up --build
 ```
 
-Access at: **https://localhost**
+Access at: **https://localhost/mailler**
 
 **Features:**
 - ✅ Hot reload for frontend and backend
@@ -147,9 +147,9 @@ Access at: **https://localhost**
 ### Option 4: Production Docker Deployment
 
 ```bash
-# Create .env file with your OIDC configuration
-cp .env.example .env
-# Edit .env
+# Create deployment environment file
+cp .env.example .env.test
+# Edit .env.test or change docker-compose.yml to point at a different env_file
 
 # Start all services
 docker-compose up -d
@@ -163,9 +163,24 @@ docker-compose down
 
 ## ⚙️ Configuration
 
-### Environment Variables
+### Configuration Files
 
-Create a `.env` file in the backend directory with the following:
+Use the configuration file that matches how you run the app:
+
+- `backend/.env` for local backend development
+- `frontend/.env.local` for optional Vite overrides during local frontend development
+- `.env.test` in the repository root for `docker-compose.yml` and the bundled test OIDC provider
+
+### Backend Environment Variables
+
+For local development, create `backend/.env` from `backend/.env.example`:
+
+```bash
+cd backend
+cp .env.example .env
+```
+
+Recommended local backend configuration:
 
 ```env
 # Database
@@ -183,15 +198,78 @@ OIDC_CLIENT_SECRET=your_client_secret_here
 OIDC_CALLBACK_URL=http://localhost:3000/auth/callback
 OIDC_SCOPE=openid profile email
 
+# Optional: only set this when the browser must use a different public URL
+# than the URL the backend uses for OIDC discovery/token/JWKS calls.
+# Example: backend uses http://test-oidc-provider:9000, browser uses https://localhost/test_openidc
+# OIDC_PUBLIC_ISSUER=https://your-public-oidc-url
+
 # Session & Security
 SESSION_SECRET=your_random_32_character_secret_here
 ENCRYPTION_KEY=your_32_character_encryption_key
+SESSION_COOKIE_DOMAIN=localhost
 
 # Server
 PORT=3000
 NODE_ENV=development
 FRONTEND_URL=http://localhost:5173
+TRUST_PROXY=false
+AUTO_MIGRATE=true
+APP_BASE_PATH=/mailler
+SMTP_PORTS=25,587,465
+
+# Optional for self-signed HTTPS OIDC providers in development only
+ALLOW_INSECURE_OIDC_TLS=false
 ```
+
+Notes:
+
+- `APP_BASE_PATH` defaults to `/mailler` in both the backend and frontend.
+- `OIDC_ISSUER` is the only required issuer setting.
+- `OIDC_PUBLIC_ISSUER` is optional and is only needed when the backend reaches the provider on an internal URL but the browser must be redirected to a different public URL.
+- Set `TRUST_PROXY=true` when running behind HAProxy or another reverse proxy.
+- `AUTO_MIGRATE=true` applies pending SQL migrations on startup.
+
+### Frontend Environment Variables
+
+The frontend works without a `.env.local` for the default local setup, but you can create `frontend/.env.local` to override the defaults:
+
+```env
+VITE_APP_BASE_PATH=/mailler
+VITE_API_URL=http://localhost:3000/
+VITE_ASSET_BASE=./
+VITE_DEBUG_LOGS=false
+```
+
+Notes:
+
+- Keep `VITE_APP_BASE_PATH` aligned with the backend `APP_BASE_PATH`.
+- `VITE_API_URL` is optional. If omitted, the frontend uses the app base path and expects the backend to be available under the same origin and prefix.
+- `VITE_ASSET_BASE` controls the Vite asset base during builds.
+
+### Docker Compose / Test OIDC Configuration
+
+`docker-compose.yml` reads `.env.test` from the repository root for PostgreSQL, the backend, and `test-oidc-provider`.
+
+The important values for the bundled local OIDC flow are:
+
+```env
+OIDC_ISSUER=http://test-oidc-provider:9000
+OIDC_PUBLIC_ISSUER=https://localhost/test_openidc
+OIDC_CLIENT_ID=MailuId
+OIDC_CLIENT_SECRET=local-test-client-secret
+OIDC_CALLBACK_URL=https://localhost/mailler/oauth2/authorize
+FRONTEND_URL=https://localhost
+TRUST_PROXY=true
+SMTP_PORTS=25,587,465
+
+# Variables consumed by test-oidc-provider itself
+ISSUER=http://test-oidc-provider:9000
+PUBLIC_ISSUER=https://localhost/test_openidc
+CLIENT_ID=MailuId
+CLIENT_SECRET=local-test-client-secret
+```
+
+For the Docker test flow, open `https://localhost/mailler` after the stack is healthy.
 
 ### OIDC Provider Setup
 
@@ -202,9 +280,10 @@ FRONTEND_URL=http://localhost:5173
 3. Create a new **OAuth 2.0 / OpenID Connect** application
 4. Configure application settings:
    - **Name**: Mailler
-   - **Redirect URI**: `http://localhost:3000/auth/callback`
-   - **Post Logout Redirect URI**: `http://localhost:5173`
-   - **Allowed CORS Origins**: `http://localhost:5173`
+   - **Redirect URI**: `http://localhost:3000/auth/callback` for direct backend development
+   - **Redirect URI**: `https://localhost/mailler/oauth2/authorize` for the proxied Docker/HAProxy flow
+   - **Allowed CORS Origins**: `http://localhost:5173` for local Vite development
+   - **Allowed CORS Origins**: `https://localhost` for the proxied Docker flow
 5. Copy the Client ID and Client Secret
 6. Update your `backend/.env`:
    ```env
@@ -213,12 +292,20 @@ FRONTEND_URL=http://localhost:5173
    OIDC_CLIENT_SECRET=your_client_secret
    OIDC_CALLBACK_URL=http://localhost:3000/auth/callback
    OIDC_SCOPE=openid profile email
+
+   # Optional if browser and backend must use different provider URLs
+   # OIDC_PUBLIC_ISSUER=https://your-public-oidc-url
    ```
 
 For **production deployment**, update the URLs:
 ```env
-OIDC_CALLBACK_URL=https://yourdomain.com/auth/callback
+OIDC_CALLBACK_URL=https://yourdomain.com/mailler/oauth2/authorize
 FRONTEND_URL=https://yourdomain.com
+APP_BASE_PATH=/mailler
+
+# Optional if your backend talks to the provider on an internal/private URL
+# but the browser must be redirected to a public URL
+# OIDC_PUBLIC_ISSUER=https://your-public-oidc-url
 ```
 
 #### Auth0 Example

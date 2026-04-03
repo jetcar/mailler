@@ -85,13 +85,14 @@ function validateCodeChallenge(verifier, challenge, method) {
 app.get('/.well-known/openid-configuration', (req, res) => {
     console.log('📋 Discovery endpoint called');
 
-    // Return public URLs for browser access
+    // Return internal service URLs for backend-to-backend OIDC calls.
+    // The Mailler backend rewrites only the browser authorization URL to PUBLIC_ISSUER.
     const config = {
-        issuer: PUBLIC_ISSUER,
-        authorization_endpoint: `${PUBLIC_ISSUER}/authorize`,
-        token_endpoint: `${PUBLIC_ISSUER}/token`,
-        userinfo_endpoint: `${PUBLIC_ISSUER}/userinfo`,
-        jwks_uri: `${PUBLIC_ISSUER}/.well-known/jwks.json`,
+        issuer: ISSUER,
+        authorization_endpoint: `${ISSUER}/authorize`,
+        token_endpoint: `${ISSUER}/token`,
+        userinfo_endpoint: `${ISSUER}/userinfo`,
+        jwks_uri: `${ISSUER}/.well-known/jwks.json`,
         response_types_supported: ['code', 'id_token', 'token id_token'],
         subject_types_supported: ['public'],
         id_token_signing_alg_values_supported: ['RS256'],
@@ -102,7 +103,8 @@ app.get('/.well-known/openid-configuration', (req, res) => {
         grant_types_supported: ['authorization_code', 'refresh_token']
     };
 
-    console.log('📤 Returning discovery with PUBLIC_ISSUER:', PUBLIC_ISSUER);
+    console.log('📤 Returning discovery with internal ISSUER:', ISSUER);
+    console.log('🌐 Public browser issuer remains:', PUBLIC_ISSUER);
     res.json(config);
 });
 
@@ -276,7 +278,7 @@ app.post('/token', async (req, res) => {
     // Generate ID token (JWT)
     const now = Math.floor(Date.now() / 1000);
     const idTokenPayload = {
-        iss: PUBLIC_ISSUER,  // Use public issuer for browser-accessible endpoints
+        iss: ISSUER,
         sub: authData.user.sub,
         aud: client_id,
         exp: now + (parseInt(process.env.ID_TOKEN_EXPIRATION) || 3600),

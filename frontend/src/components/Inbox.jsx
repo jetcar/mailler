@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Outlet, useNavigate, useSearchParams } from 'react-router-dom';
 import { messagesAPI, accountsAPI, authAPI } from '../services/api';
+import { buildAppPath } from '../config/appPaths';
 import { logger } from '../utils/logger';
 import ImportDialog from './ImportDialog';
 import ImportProgressOverlay from './ImportProgressOverlay';
@@ -270,7 +271,9 @@ export default function Inbox() {
         logs: []
       });
 
-      eventSource = new EventSource(`/api/messages/import/progress/${sessionId}`, { withCredentials: true });
+      eventSource = new EventSource(buildAppPath(`/api/messages/import/progress/${sessionId}`), {
+        withCredentials: true
+      });
 
       eventSource.onmessage = (messageEvent) => {
         const data = JSON.parse(messageEvent.data);

@@ -1,5 +1,6 @@
 const express = require('express');
 const { passport, initializeOIDC } = require('../config/passport');
+const { buildAppPath, buildFrontendUrl } = require('../config/appPaths');
 const { logger } = require('../middleware/errorHandler');
 
 const router = express.Router();
@@ -13,7 +14,7 @@ router.get('/login', (req, res, next) => {
   next();
 }, passport.authenticate('oidc'));
 
-// Callback routes - support both /auth/callback and /webmail/oauth2/authorize for HAProxy
+// Callback routes - support both /auth/callback and virtual-path callbacks such as /mailler/oauth2/authorize
 router.get('/callback',
   (req, res, next) => {
     logger.info('OIDC callback received', {
@@ -23,10 +24,10 @@ router.get('/callback',
     next();
   },
   passport.authenticate('oidc', {
-    failureRedirect: '/auth/login'
+    failureRedirect: buildAppPath('/auth/login')
   }),
   (req, res) => {
-    const redirectUrl = (process.env.FRONTEND_URL || 'https://host.docker.internal') + '/inbox';
+    const redirectUrl = buildFrontendUrl('/inbox');
     logger.info('OIDC authentication succeeded', {
       user: req.user?.email || req.user?.id,
       redirectUrl
@@ -46,10 +47,10 @@ router.get('/oauth2/authorize',
     next();
   },
   passport.authenticate('oidc', {
-    failureRedirect: '/auth/login'
+    failureRedirect: buildAppPath('/auth/login')
   }),
   (req, res) => {
-    const redirectUrl = (process.env.FRONTEND_URL || 'https://host.docker.internal') + '/inbox';
+    const redirectUrl = buildFrontendUrl('/inbox');
     logger.info('Alternate OIDC authentication succeeded', {
       user: req.user?.email || req.user?.id,
       redirectUrl

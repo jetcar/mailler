@@ -120,6 +120,17 @@ passport.use('oidc', new CustomStrategy(async (req, done) => {
         hasNonce: Boolean(nonce)
       });
 
+      if (!codeVerifier || !state || !nonce) {
+        logger.warn('OIDC callback missing session state; redirecting user to login', {
+          hasCodeVerifier: Boolean(codeVerifier),
+          hasState: Boolean(state),
+          hasNonce: Boolean(nonce),
+          callbackUrl: req.originalUrl,
+        });
+
+        return done(null, false);
+      }
+
       logger.info('Exchanging authorization code for tokens');
       // Exchange code for tokens with automatic signature validation
       const tokenSet = await client.callback(
