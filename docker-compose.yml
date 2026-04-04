@@ -19,7 +19,7 @@ services:
   backend:
     build:
       context: .
-      dockerfile: backend/Dockerfile
+      dockerfile: backend-dotnet/Dockerfile
     container_name: mailler-backend
     env_file:
       - .env.test

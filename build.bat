@@ -2,9 +2,9 @@
 setlocal enabledelayedexpansion
 
 REM Usage:
-REM   build-and-push.bat [tag]
+REM   build.bat [tag]
 REM Example:
-REM   build-and-push.bat v1.0.0
+REM   build.bat v1.0.0
 
 set "IMAGE_TAG=%~1"
 

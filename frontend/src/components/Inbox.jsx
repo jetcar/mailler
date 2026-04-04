@@ -46,6 +46,7 @@ export default function Inbox() {
   const [itemsPerPage] = useState(50);
   const [currentSessionId, setCurrentSessionId] = useState(null);
   const [isImportActionPending, setIsImportActionPending] = useState(false);
+  const [importError, setImportError] = useState('');
 
   useEffect(() => {
     void init();
@@ -190,8 +191,10 @@ export default function Inbox() {
 
   async function handleFetchFolders(event) {
     event.preventDefault();
+    setImportError('');
 
     if (!importData.imap_username || !importData.imap_password) {
+      setImportError('Enter your Gmail address and app password before fetching folders.');
       logger.warn('IMAP credentials required for folder fetch');
       return;
     }
@@ -219,6 +222,7 @@ export default function Inbox() {
       setImportStep(2);
     } catch (error) {
       const errorMsg = error.response?.data?.error || error.message;
+      setImportError(errorMsg);
 
       if (errorMsg.includes('Application-specific password')) {
         logger.error(
@@ -239,8 +243,10 @@ export default function Inbox() {
 
   async function handleImport(event) {
     event.preventDefault();
+    setImportError('');
 
     if (accounts.length === 0) {
+      setImportError('Add an email account in Settings before importing from Gmail.');
       logger.warn('No email account available for import');
       return;
     }
@@ -248,6 +254,7 @@ export default function Inbox() {
     const selectedFolderNames = Object.keys(selectedFolders).filter((folder) => selectedFolders[folder]);
 
     if (selectedFolderNames.length === 0) {
+      setImportError('Select at least one folder to import.');
       logger.warn('No folders selected for import');
       return;
     }
@@ -258,7 +265,6 @@ export default function Inbox() {
 
     try {
       setIsImportActionPending(true);
-      setShowImportDialog(false);
       setCurrentSessionId(sessionId);
       setImportProgress({
         isImporting: true,
@@ -350,12 +356,14 @@ export default function Inbox() {
         session_id: sessionId
       });
 
+      setShowImportDialog(false);
       logger.info('Import started, waiting for SSE completion', { sessionId });
       setIsImportActionPending(false);
     } catch (error) {
       eventSource?.close();
-      logger.error('Import failed', { error: error.response?.data?.error || error.message });
-      setImportStep(1);
+      const errorMessage = error.response?.data?.error || error.message;
+      logger.error('Import failed', { error: errorMessage });
+      setImportError(errorMessage);
       setCurrentSessionId(null);
       resetImportProgress();
       setIsImportActionPending(false);
@@ -365,6 +373,7 @@ export default function Inbox() {
   function handleCloseImportDialog() {
     setShowImportDialog(false);
     setImportStep(1);
+    setImportError('');
   }
 
   async function handleStopImport() {
@@ -481,9 +490,13 @@ export default function Inbox() {
           availableFolders={availableFolders}
           selectedFolders={selectedFolders}
           setSelectedFolders={setSelectedFolders}
+          importError={importError}
           isImportActionPending={isImportActionPending}
           onClose={handleCloseImportDialog}
-          onBack={() => setImportStep(1)}
+          onBack={() => {
+            setImportError('');
+            setImportStep(1);
+          }}
           onFetchFolders={handleFetchFolders}
           onImport={handleImport}
         />

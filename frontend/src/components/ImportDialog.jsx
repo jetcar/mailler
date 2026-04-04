@@ -8,6 +8,7 @@ export default function ImportDialog({
     availableFolders,
     selectedFolders,
     setSelectedFolders,
+    importError,
     isImportActionPending,
     onClose,
     onBack,
@@ -28,6 +29,13 @@ export default function ImportDialog({
         <div style={styles.modal}>
             <div style={styles.modalContent}>
                 <h2>Import from Gmail - Step {importStep} of 2</h2>
+
+                {importError && (
+                    <div style={styles.errorBox}>
+                        <strong>Import could not start</strong><br />
+                        {importError}
+                    </div>
+                )}
 
                 {importStep === 1 ? (
                     <>

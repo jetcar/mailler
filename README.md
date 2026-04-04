@@ -236,7 +236,7 @@ The frontend works without a `.env.local` for the default local setup, but you c
 ```env
 VITE_APP_BASE_PATH=/mailler
 VITE_API_URL=http://localhost:3000/
-VITE_ASSET_BASE=./
+VITE_ASSET_BASE=/mailler/
 VITE_DEBUG_LOGS=false
 ```
 
@@ -244,7 +244,7 @@ Notes:
 
 - Keep `VITE_APP_BASE_PATH` aligned with the backend `APP_BASE_PATH`.
 - `VITE_API_URL` is optional. If omitted, the frontend uses the app base path and expects the backend to be available under the same origin and prefix.
-- `VITE_ASSET_BASE` controls the Vite asset base during builds.
+- `VITE_ASSET_BASE` controls the Vite asset base during builds. If omitted, it defaults to the app base path with a trailing slash, such as `/mailler/`.
 
 ### Docker Compose / Test OIDC Configuration
 

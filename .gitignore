@@ -43,3 +43,6 @@ certs/*.crt
 # Build outputs
 dist/
 build/
+**/bin/
+**/obj/
+backend-dotnet/Mailler.Api/wwwroot/

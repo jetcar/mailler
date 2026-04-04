@@ -105,6 +105,16 @@ export const styles = {
         lineHeight: '1.6',
         color: 'var(--info)'
     },
+    errorBox: {
+        backgroundColor: 'var(--bg-danger-soft, rgba(183, 28, 28, 0.08))',
+        padding: '1rem',
+        borderRadius: '10px',
+        fontSize: '0.9rem',
+        marginBottom: '1.5rem',
+        border: '1px solid rgba(183, 28, 28, 0.24)',
+        lineHeight: '1.6',
+        color: 'var(--danger)'
+    },
     folderList: {
         listStyle: 'none',
         padding: 0,
