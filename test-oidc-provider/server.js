@@ -4,6 +4,7 @@ const cors = require('cors');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const jose = require('node-jose');
+const nodemailer = require('nodemailer');
 
 const app = express();
 const PORT = process.env.PORT || 9000;
@@ -52,6 +53,9 @@ const HARDCODED_USER = {
 // Client configuration
 const CLIENT_ID = process.env.CLIENT_ID || 'MailuId';
 const CLIENT_SECRET = process.env.CLIENT_SECRET || 'local-test-client-secret';
+
+// Mailler API base URL for the test send page
+const MAILLER_API_URL = process.env.MAILLER_API_URL || 'http://localhost:3000';
 
 // Generate RSA key pair for JWT signing
 let keystore;
@@ -384,6 +388,97 @@ app.get('/', (req, res) => {
             name: HARDCODED_USER.name
         }
     });
+});
+
+// Send test email page - calls Mailler HTTP API from the browser using its existing session cookie
+app.get('/send-test', (req, res) => {
+    const timestamp = new Date().toISOString();
+    res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Send Test Email</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 600px; margin: 2rem auto; padding: 0 1rem; background: #f5f5f5; color: #222; }
+    h1 { margin-bottom: .5rem; }
+    p.hint { margin: 0 0 1.5rem; color: #555; font-size: .9rem; }
+    label { display: block; font-weight: bold; margin-bottom: .3rem; margin-top: 1rem; }
+    input, select, textarea { width: 100%; padding: .6rem; font-size: 1rem; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; background: #fff; }
+    textarea { resize: vertical; }
+    button { margin-top: 1.5rem; padding: .7rem 2rem; font-size: 1rem; background: #1a73e8; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+    button:disabled { opacity: .6; cursor: default; }
+    #result { margin-top: 1.5rem; padding: 1rem; border-radius: 6px; white-space: pre-wrap; word-break: break-all; font-family: monospace; font-size: .9rem; display: none; }
+    .ok { background: #d4edda; color: #155724; }
+    .err { background: #f8d7da; color: #721c24; }
+    a { display: inline-block; margin-bottom: 1rem; color: #1a73e8; text-decoration: none; font-size: .9rem; }
+  </style>
+</head>
+<body>
+  <a href="/">&larr; Back</a>
+  <h1>Send Test Email</h1>
+  <p class="hint">Sends via the Mailler API at <code>${MAILLER_API_URL}</code> using your existing session cookie.</p>
+
+  <label for="account">From account</label>
+  <select id="account"><option value="">Loading accounts&hellip;</option></select>
+
+  <form id="form">
+    <label for="to">To</label>
+    <input id="to" name="to" type="email" placeholder="recipient@example.com" required />
+    <label for="subject">Subject</label>
+    <input id="subject" name="subject" type="text" value="Test email ${timestamp}" required />
+    <label for="body">Body</label>
+    <textarea id="body" name="body" rows="6">This is a test email.</textarea>
+    <button type="submit" id="btn">Send</button>
+  </form>
+  <div id="result"></div>
+
+  <script>
+    const API = '${MAILLER_API_URL}';
+
+    async function loadAccounts() {
+      const sel = document.getElementById('account');
+      try {
+        const res = await fetch(API + '/api/accounts', { credentials: 'include' });
+        if (!res.ok) throw new Error('HTTP ' + res.status + ' \u2014 are you logged in to Mailler?');
+        const data = await res.json();
+        const accounts = data.accounts ?? [];
+        sel.innerHTML = accounts.length
+          ? accounts.map(a => '<option value="' + a.id + '">' + a.email_address + '</option>').join('')
+          : '<option value="">No accounts found</option>';
+      } catch (err) {
+        sel.innerHTML = '<option value="">Failed to load: ' + err.message + '</option>';
+      }
+    }
+
+    loadAccounts();
+
+    document.getElementById('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('btn');
+      const result = document.getElementById('result');
+      const accountId = document.getElementById('account').value;
+      if (!accountId) { alert('Select a from account first.'); return; }
+      btn.disabled = true;
+      btn.textContent = 'Sending\u2026';
+      result.style.display = 'none';
+      const payload = { account_id: accountId, to: e.target.to.value, subject: e.target.subject.value, text: e.target.body.value };
+      try {
+        const res = await fetch(API + '/api/messages/send', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        const data = await res.json();
+        result.className = res.ok ? 'ok' : 'err';
+        result.textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        result.className = 'err';
+        result.textContent = 'Request failed: ' + err.message;
+      } finally {
+        result.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Send';
+      }
+    });
+  </script>
+</body>
+</html>`);
 });
 
 // Error handler
