@@ -58,14 +58,14 @@ export default function Settings() {
 
   return (
     <div style={styles.container}>
-      <header style={styles.header}>
+      <header style={styles.header} className="page-header">
         <h1>⚙️ Settings</h1>
         <button style={styles.button} onClick={() => navigate('/inbox')}>
           Back to Inbox
         </button>
       </header>
 
-      <main style={styles.main}>
+      <main style={styles.main} className="page-main">
         <section style={styles.section}>
           <div style={styles.sectionHeader}>
             <h2>Email Accounts</h2>
@@ -75,7 +75,7 @@ export default function Settings() {
           </div>
 
           {showForm && (
-            <form onSubmit={handleSubmit} style={styles.form}>
+            <form onSubmit={handleSubmit} style={styles.form} className="page-card">
               <h3>Add Email Account</h3>
               <p style={styles.helpText}>
                 Accounts now store only the local email address and default flag. Import credentials are entered only when you run a Gmail import.

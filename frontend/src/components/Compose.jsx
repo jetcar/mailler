@@ -57,15 +57,15 @@ export default function Compose() {
 
   return (
     <div style={styles.container}>
-      <header style={styles.header}>
+      <header style={styles.header} className="page-header">
         <h1>📧 Compose Email</h1>
         <button style={styles.button} onClick={() => navigate('/inbox')}>
           Back to Inbox
         </button>
       </header>
 
-      <main style={styles.main}>
-        <form onSubmit={handleSubmit} style={styles.form}>
+      <main style={styles.main} className="page-main">
+        <form onSubmit={handleSubmit} style={styles.form} className="page-card">
           <div style={styles.field}>
             <label style={styles.label}>From:</label>
             <select

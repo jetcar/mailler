@@ -29,6 +29,7 @@ export default function Inbox() {
   const [accounts, setAccounts] = useState([]);
   const [user, setUser] = useState(null);
   const [showImportDialog, setShowImportDialog] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredMessages, setFilteredMessages] = useState([]);
   const [importStep, setImportStep] = useState(1);
@@ -155,6 +156,7 @@ export default function Inbox() {
       params.set('folder', folder);
     }
 
+    setSidebarOpen(false);
     navigate(`/inbox${params.toString() ? `?${params.toString()}` : ''}`);
   }
 
@@ -427,20 +429,33 @@ export default function Inbox() {
 
   return (
     <div style={styles.container}>
-      <header style={styles.header}>
-        <h1>📧 Mailler</h1>
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-          <span style={{ marginRight: '0.5rem' }}>{user?.email}</span>
-          <button style={styles.button} onClick={handleSync}>Sync</button>
-          <button style={styles.button} onClick={() => setShowImportDialog(true)}>Import from Gmail</button>
-          <button style={styles.button} onClick={() => navigate('/compose')}>Compose</button>
-          <button style={styles.button} onClick={() => navigate('/settings')}>Settings</button>
-          <button style={styles.button} onClick={handleLogout}>Logout</button>
+      <header style={styles.header} className="inbox-header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <button
+            className="sidebar-toggle"
+            onClick={() => setSidebarOpen((o) => !o)}
+            aria-label="Toggle sidebar"
+          >
+            ☰
+          </button>
+          <h1 style={{ margin: 0 }}>📧 Mailler</h1>
+        </div>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }} className="inbox-header-actions">
+          <span style={{ marginRight: '0.5rem' }} className="inbox-header-user">{user?.email}</span>
+          <button style={styles.button} onClick={handleSync} aria-label="Sync">🔄 <span className="btn-label">Sync</span></button>
+          <button style={styles.button} onClick={() => setShowImportDialog(true)} aria-label="Import from Gmail">📥 <span className="btn-label">Import from Gmail</span></button>
+          <button style={styles.button} onClick={() => navigate('/compose')} aria-label="Compose">✏️ <span className="btn-label">Compose</span></button>
+          <button style={styles.button} onClick={() => navigate('/settings')} aria-label="Settings">⚙️ <span className="btn-label">Settings</span></button>
+          <button style={styles.button} onClick={handleLogout} aria-label="Logout">🚪 <span className="btn-label">Logout</span></button>
         </div>
       </header>
 
-      <div style={styles.main}>
-        <aside style={styles.sidebar}>
+      <div style={styles.main} className="inbox-main">
+        {sidebarOpen && (
+          <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />
+        )}
+
+        <aside style={styles.sidebar} className={`inbox-sidebar${sidebarOpen ? ' sidebar-open' : ''}`}>
           <input
             type="text"
             placeholder="🔍 Search messages..."

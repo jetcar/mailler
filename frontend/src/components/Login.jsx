@@ -42,8 +42,8 @@ export default function Login() {
 
   return (
     <div style={styles.container}>
-      <div style={styles.card}>
-        <h1 style={styles.title}>📧 Mailler</h1>
+      <div style={styles.card} className="login-card">
+        <h1 style={styles.title} className="login-title">📧 Mailler</h1>
         <p style={styles.subtitle}>Email Management Platform</p>
         <button style={styles.button} onClick={handleLogin}>
           Login with OpenID Connect

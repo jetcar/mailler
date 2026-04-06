@@ -107,3 +107,167 @@ button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+/* ===========================
+   Responsive Layout
+   =========================== */
+
+/* Sidebar toggle button – hidden on desktop, shown on mobile */
+.sidebar-toggle {
+  display: none;
+  background: none !important;
+  border: none !important;
+  color: var(--text-on-accent);
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  margin: 0;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+/* Overlay behind the sidebar drawer – hidden on desktop */
+.sidebar-overlay {
+  display: none;
+}
+
+/* ===========================
+   Mobile – max-width: 768px
+   =========================== */
+@media (max-width: 768px) {
+  /* Inbox header */
+  .inbox-header {
+    padding: 0.75rem 1rem !important;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .inbox-header h1 {
+    font-size: 1.2rem;
+  }
+
+  /* Hide user email address in the header on small screens */
+  .inbox-header-user {
+    display: none !important;
+  }
+
+  /* Header action buttons – allow wrapping and tighten gaps */
+  .inbox-header-actions {
+    gap: 0.35rem !important;
+  }
+
+  /* Sidebar toggle button visible on mobile */
+  .sidebar-toggle {
+    display: inline-block;
+  }
+
+  /* Hide button text labels; keep emoji icons */
+  .btn-label {
+    display: none;
+  }
+
+  /* Main layout – stack sidebar below header as a drawer */
+  .inbox-main {
+    flex-direction: column !important;
+  }
+
+  /* Sidebar – slide-in drawer */
+  .inbox-sidebar {
+    position: fixed !important;
+    top: 0;
+    left: -100%;
+    width: 280px !important;
+    height: 100dvh;
+    z-index: 600;
+    box-shadow: 2px 0 16px rgba(0, 0, 0, 0.28);
+    transition: left 0.25s ease;
+  }
+
+  .inbox-sidebar.sidebar-open {
+    left: 0;
+  }
+
+  /* Dim overlay behind the open sidebar */
+  .sidebar-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.42);
+    z-index: 500;
+  }
+
+  /* Message list toolbar */
+  .message-list-header {
+    padding: 0.75rem 1rem !important;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  /* Individual message rows */
+  .message-item {
+    padding: 0.75rem 1rem !important;
+    align-items: flex-start !important;
+  }
+
+  /* Stack from / subject / date vertically */
+  .message-item-content {
+    flex-direction: column !important;
+    gap: 0.15rem !important;
+    align-items: flex-start !important;
+  }
+
+  .message-from {
+    min-width: unset !important;
+    font-size: 0.9rem !important;
+  }
+
+  .message-subject {
+    white-space: normal !important;
+    font-size: 0.9rem !important;
+  }
+
+  .message-date {
+    min-width: unset !important;
+    text-align: left !important;
+    font-size: 0.8rem !important;
+  }
+
+  /* Message detail view */
+  .message-detail {
+    padding: 1rem !important;
+  }
+
+  /* Shared page header (Compose, Settings) */
+  .page-header {
+    padding: 0.75rem 1rem !important;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .page-header h1 {
+    font-size: 1.2rem;
+  }
+
+  /* Scrollable page body */
+  .page-main {
+    padding: 1rem !important;
+  }
+
+  /* Inner cards / forms */
+  .page-card {
+    padding: 1.25rem !important;
+  }
+
+  /* Login card */
+  .login-card {
+    padding: 2rem 1.25rem !important;
+    width: calc(100% - 2rem) !important;
+    max-width: unset !important;
+    margin: 1rem;
+    box-sizing: border-box;
+  }
+
+  .login-title {
+    font-size: 2rem !important;
+  }
+}

@@ -59,7 +59,7 @@ export default function MessageList() {
 
     return (
         <div style={styles.container}>
-            <div style={styles.header}>
+            <div style={styles.header} className="message-list-header">
                 <div style={styles.headerLeft}>
                     <label style={styles.selectAllLabel}>
                         <input
@@ -99,6 +99,7 @@ export default function MessageList() {
                         <li
                             key={msg.id}
                             style={{ ...styles.item, ...(msg.is_read ? {} : styles.unread) }}
+                            className="message-item"
                             onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-surface-soft)'}
                             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = msg.is_read ? 'var(--bg-surface)' : 'var(--bg-accent-soft)'}
                         >
@@ -109,10 +110,10 @@ export default function MessageList() {
                                 onClick={(e) => e.stopPropagation()}
                                 style={styles.checkbox}
                             />
-                            <div style={styles.itemContent} onClick={() => openMessage(msg)}>
-                                <div style={styles.from}>{msg.from_address}</div>
-                                <div style={styles.subject}>{msg.subject}</div>
-                                <div style={styles.date}>{new Date(msg.received_date).toLocaleDateString()}</div>
+                            <div style={styles.itemContent} className="message-item-content" onClick={() => openMessage(msg)}>
+                                <div style={styles.from} className="message-from">{msg.from_address}</div>
+                                <div style={styles.subject} className="message-subject">{msg.subject}</div>
+                                <div style={styles.date} className="message-date">{new Date(msg.received_date).toLocaleDateString()}</div>
                             </div>
                         </li>
                     ))}

@@ -59,7 +59,7 @@ export default function MessageDetail() {
     }
 
     return (
-        <div style={styles.container}>
+        <div style={styles.container} className="message-detail">
             <div style={styles.toolbar}>
                 <button style={styles.backBtn} onClick={handleBack}>← Back to List</button>
                 <button style={styles.deleteBtn} onClick={handleDelete}>🗑️ Delete</button>
