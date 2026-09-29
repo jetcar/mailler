@@ -107,3 +107,62 @@ button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+.inbox-header {
+  flex-wrap: wrap;
+}
+
+.inbox-header-actions {
+  flex-wrap: wrap;
+}
+
+.inbox-content {
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .inbox-header {
+    align-items: flex-start !important;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem !important;
+  }
+
+  .inbox-header h1 {
+    flex-basis: 100%;
+    margin: 0;
+  }
+
+  .inbox-header-actions {
+    gap: 0.5rem !important;
+    width: 100%;
+  }
+
+  .inbox-header-actions span {
+    flex-basis: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .inbox-header-actions button {
+    flex: 1 1 auto;
+    margin: 0 !important;
+  }
+
+  .inbox-main {
+    flex-direction: column !important;
+    min-height: 0;
+  }
+
+  .inbox-sidebar {
+    width: 100% !important;
+    max-height: 14rem;
+    border-right: 0 !important;
+    border-bottom: 1px solid var(--border-soft);
+    flex-shrink: 0;
+  }
+
+  .inbox-content {
+    min-width: 0;
+    min-height: 0;
+    width: 100%;
+  }
+}
