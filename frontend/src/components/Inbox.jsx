@@ -427,9 +427,9 @@ export default function Inbox() {
 
   return (
     <div style={styles.container}>
-      <header style={styles.header}>
+      <header className="inbox-header" style={styles.header}>
         <h1>📧 Mailler</h1>
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+        <div className="inbox-header-actions" style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
           <span style={{ marginRight: '0.5rem' }}>{user?.email}</span>
           <button style={styles.button} onClick={handleSync}>Sync</button>
           <button style={styles.button} onClick={() => setShowImportDialog(true)}>Import from Gmail</button>
@@ -439,8 +439,8 @@ export default function Inbox() {
         </div>
       </header>
 
-      <div style={styles.main}>
-        <aside style={styles.sidebar}>
+      <div className="inbox-main" style={styles.main}>
+        <aside className="inbox-sidebar" style={styles.sidebar}>
           <input
             type="text"
             placeholder="🔍 Search messages..."
@@ -477,7 +477,7 @@ export default function Inbox() {
           </div>
         </aside>
 
-        <main style={styles.content}>
+        <main className="inbox-content" style={styles.content}>
           <Outlet context={outletContext} />
         </main>
       </div>
