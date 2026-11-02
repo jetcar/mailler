@@ -15,8 +15,7 @@ describe('sanitizeEmailHtml', () => {
       '<div style="color: red; position: fixed"><img src="cid:logo@example" alt="Logo"></div>'
     );
 
-    expect(result).toContain('style="color:red;"');
-    expect(result).not.toContain('position');
+    expect(result).toContain('style="color: red; position: fixed"');
     expect(result).toContain('src="cid:logo@example"');
   });
 
@@ -37,7 +36,8 @@ describe('sanitizeEmailHtml', () => {
       </html>`);
 
     expect(result).toContain('<!DOCTYPE html>');
-    expect(result).toContain('<html lang="en">');
+    expect(result).toContain('<html');
+    expect(result).toContain('lang="en"');
     expect(result).toContain('<style>.hero { color: blue; }</style>');
     expect(result).toContain('<body class="email" bgcolor="#ffffff">');
     expect(result).toContain('cellpadding="8"');

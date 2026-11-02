@@ -1,46 +1,32 @@
-const xss = require('xss');
+const createDOMPurify = require('dompurify');
+const { JSDOM } = require('jsdom');
 
-const commonAttributes = ['class', 'id', 'style', 'dir', 'lang', 'role', 'aria-label'];
-const emailAllowList = Object.fromEntries(
-  Object.entries(xss.whiteList).map(([tag, attributes]) => [
-    tag,
-    [...new Set([...attributes, ...commonAttributes])]
-  ])
-);
-Object.assign(emailAllowList, {
-  html: ['lang', 'dir'],
-  head: [],
-  title: [],
-  meta: ['charset', 'name', 'content'],
-  style: ['type', 'media'],
-  body: [...commonAttributes, 'bgcolor', 'text', 'link', 'vlink', 'alink']
-});
-emailAllowList.table.push('cellpadding', 'cellspacing', 'bgcolor');
-emailAllowList.td.push('bgcolor');
-emailAllowList.th.push('bgcolor');
-emailAllowList.img.push('border', 'align');
-
-const emailHtmlFilter = new xss.FilterXSS({
-  whiteList: emailAllowList,
-  onIgnoreTag(tag, html) {
-    if (tag === '!doctype' && /^<!doctype\s+html(?:\s+[^>]*)?>$/i.test(html)) {
-      return '<!DOCTYPE html>';
-    }
-
-    return undefined;
-  },
-  safeAttrValue(tag, name, value, cssFilter) {
-    const trimmedValue = value.trim();
-    if (tag === 'img' && name === 'src' && /^cid:[a-z0-9._@+-]+$/i.test(trimmedValue)) {
-      return xss.escapeAttrValue(trimmedValue);
-    }
-
-    return xss.safeAttrValue(tag, name, value, cssFilter);
-  }
-});
+const window = new JSDOM('').window;
+const DOMPurify = createDOMPurify(window);
 
 function sanitizeEmailHtml(html) {
-  return emailHtmlFilter.process(html);
+  const hasHtmlDoctype = /<!doctype\s+html(?:\s+[^>]*)?>/i.test(html);
+  const withoutDoctype = html.replace(/<!doctype[^>]*>/gi, '');
+  const sanitized = DOMPurify.sanitize(withoutDoctype, {
+    WHOLE_DOCUMENT: true,
+    USE_PROFILES: { html: true },
+    ADD_TAGS: ['title', 'meta', 'style'],
+    ADD_ATTR: [
+      'xmlns',
+      'bgcolor',
+      'text',
+      'link',
+      'vlink',
+      'alink',
+      'cellpadding',
+      'cellspacing',
+      'border',
+      'align',
+      'valign'
+    ]
+  });
+
+  return hasHtmlDoctype ? `<!DOCTYPE html>\n${sanitized}` : sanitized;
 }
 
 module.exports = { sanitizeEmailHtml };
