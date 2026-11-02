@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { messagesAPI, accountsAPI } from '../services/api';
 import { logger } from '../utils/logger';
 
 export default function Compose() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [accounts, setAccounts] = useState([]);
   const [formData, setFormData] = useState({
     account_id: '',
@@ -58,16 +60,16 @@ export default function Compose() {
   return (
     <div style={styles.container}>
       <header style={styles.header}>
-        <h1>📧 Compose Email</h1>
+        <h1>📧 {t('compose.title')}</h1>
         <button style={styles.button} onClick={() => navigate('/inbox')}>
-          Back to Inbox
+          {t('compose.backToInbox')}
         </button>
       </header>
 
       <main style={styles.main}>
         <form onSubmit={handleSubmit} style={styles.form}>
           <div style={styles.field}>
-            <label style={styles.label}>From:</label>
+            <label style={styles.label}>{t('compose.from')}</label>
             <select
               name="account_id"
               value={formData.account_id}
@@ -75,7 +77,7 @@ export default function Compose() {
               style={styles.input}
               required
             >
-              <option value="">Select account</option>
+              <option value="">{t('compose.selectAccount')}</option>
               {accounts.map(acc => (
                 <option key={acc.id} value={acc.id}>
                   {acc.email_address}
@@ -85,52 +87,52 @@ export default function Compose() {
           </div>
 
           <div style={styles.field}>
-            <label style={styles.label}>To:</label>
+            <label style={styles.label}>{t('compose.to')}</label>
             <input
               type="email"
               name="to"
               value={formData.to}
               onChange={handleChange}
               style={styles.input}
-              placeholder="recipient@example.com"
+              placeholder={t('compose.recipientPlaceholder')}
               required
             />
           </div>
 
           <div style={styles.field}>
-            <label style={styles.label}>CC:</label>
+            <label style={styles.label}>{t('compose.cc')}</label>
             <input
               type="text"
               name="cc"
               value={formData.cc}
               onChange={handleChange}
               style={styles.input}
-              placeholder="cc@example.com (optional)"
+              placeholder={t('compose.ccPlaceholder')}
             />
           </div>
 
           <div style={styles.field}>
-            <label style={styles.label}>Subject:</label>
+            <label style={styles.label}>{t('compose.subject')}</label>
             <input
               type="text"
               name="subject"
               value={formData.subject}
               onChange={handleChange}
               style={styles.input}
-              placeholder="Email subject"
+              placeholder={t('compose.subjectPlaceholder')}
               required
             />
           </div>
 
           <div style={styles.field}>
-            <label style={styles.label}>Message:</label>
+            <label style={styles.label}>{t('compose.message')}</label>
             <textarea
               name="text"
               value={formData.text}
               onChange={handleChange}
               style={styles.textarea}
               rows={15}
-              placeholder="Type your message here..."
+              placeholder={t('compose.messagePlaceholder')}
               required
             />
           </div>
@@ -140,7 +142,7 @@ export default function Compose() {
             style={styles.submitButton}
             disabled={sending}
           >
-            {sending ? 'Sending...' : 'Send Email'}
+            {sending ? t('compose.sending') : t('compose.send')}
           </button>
         </form>
       </main>

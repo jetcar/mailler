@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Outlet, useNavigate, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { messagesAPI, accountsAPI, authAPI } from '../services/api';
 import { buildAppPath } from '../config/appPaths';
 import { logger } from '../utils/logger';
@@ -21,6 +22,7 @@ function createInitialImportProgress() {
 }
 
 export default function Inbox() {
+  const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const logsContainerRef = useRef(null);
@@ -194,7 +196,7 @@ export default function Inbox() {
     setImportError('');
 
     if (!importData.imap_username || !importData.imap_password) {
-      setImportError('Enter your Gmail address and app password before fetching folders.');
+      setImportError(t('import.credentialsRequired'));
       logger.warn('IMAP credentials required for folder fetch');
       return;
     }
@@ -246,7 +248,7 @@ export default function Inbox() {
     setImportError('');
 
     if (accounts.length === 0) {
-      setImportError('Add an email account in Settings before importing from Gmail.');
+      setImportError(t('import.accountRequired'));
       logger.warn('No email account available for import');
       return;
     }
@@ -254,7 +256,7 @@ export default function Inbox() {
     const selectedFolderNames = Object.keys(selectedFolders).filter((folder) => selectedFolders[folder]);
 
     if (selectedFolderNames.length === 0) {
-      setImportError('Select at least one folder to import.');
+      setImportError(t('import.folderRequired'));
       logger.warn('No folders selected for import');
       return;
     }
@@ -382,7 +384,7 @@ export default function Inbox() {
       return;
     }
 
-    if (!confirm('Stop the import? Progress will be saved for messages already imported.')) {
+    if (!confirm(t('import.stopConfirm'))) {
       return;
     }
 
@@ -431,11 +433,11 @@ export default function Inbox() {
         <h1>📧 Mailler</h1>
         <div className="inbox-header-actions" style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
           <span style={{ marginRight: '0.5rem' }}>{user?.email}</span>
-          <button style={styles.button} onClick={handleSync}>Sync</button>
-          <button style={styles.button} onClick={() => setShowImportDialog(true)}>Import from Gmail</button>
-          <button style={styles.button} onClick={() => navigate('/compose')}>Compose</button>
-          <button style={styles.button} onClick={() => navigate('/settings')}>Settings</button>
-          <button style={styles.button} onClick={handleLogout}>Logout</button>
+          <button style={styles.button} onClick={handleSync}>{t('inbox.sync')}</button>
+          <button style={styles.button} onClick={() => setShowImportDialog(true)}>{t('inbox.importFromGmail')}</button>
+          <button style={styles.button} onClick={() => navigate('/compose')}>{t('inbox.compose')}</button>
+          <button style={styles.button} onClick={() => navigate('/settings')}>{t('inbox.settings')}</button>
+          <button style={styles.button} onClick={handleLogout}>{t('inbox.logout')}</button>
         </div>
       </header>
 
@@ -443,14 +445,15 @@ export default function Inbox() {
         <aside className="inbox-sidebar" style={styles.sidebar}>
           <input
             type="text"
-            placeholder="🔍 Search messages..."
+            placeholder={`🔍 ${t('inbox.search')}`}
+            aria-label={t('inbox.search')}
             value={searchQuery}
             onChange={handleSearch}
             style={styles.searchInputSidebar}
           />
 
           <div style={styles.folderSection}>
-            <div style={styles.folderHeader}>Folders</div>
+            <div style={styles.folderHeader}>{t('inbox.folders')}</div>
             <ul style={styles.folderList}>
               {folders.map((folder) => {
                 const folderCount = folder === 'All'
@@ -467,7 +470,7 @@ export default function Inbox() {
                     onClick={() => openFolder(folder)}
                   >
                     <span style={styles.folderName}>
-                      {folder === 'All' ? '📁 All Messages' : `📂 ${folder}`}
+                      {folder === 'All' ? `📁 ${t('inbox.allMessages')}` : `📂 ${folder}`}
                     </span>
                     <span style={styles.folderCount}>{folderCount}</span>
                   </li>

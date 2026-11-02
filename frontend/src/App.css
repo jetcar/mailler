@@ -108,6 +108,29 @@ button:disabled {
   cursor: not-allowed;
 }
 
+.language-selector {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-soft);
+  color: var(--text-body);
+  font-size: 0.875rem;
+}
+
+.language-selector select {
+  min-width: 7rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+}
+
 .inbox-header {
   flex-wrap: wrap;
 }
