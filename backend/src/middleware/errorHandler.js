@@ -1,4 +1,5 @@
 const winston = require('winston');
+const { safeErrorMetadata } = require('../utils/safeErrorMetadata');
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -21,23 +22,18 @@ const logger = winston.createLogger({
  * Error handler middleware
  */
 function errorHandler(err, req, res, next) {
-  logger.error('Unhandled request error', {
-    message: err.message,
-    stack: err.stack,
-    errorType: err.constructor?.name,
-    url: req.originalUrl,
+  logger.error('Unhandled request error', safeErrorMetadata(err, {
+    path: req.path,
     method: req.method,
-    user: req.user?.email || req.user?.id,
-    status: err.status || err.response?.status
-  });
+    userId: req.user?.id
+  }));
 
-  const status = err.status || 500;
-  const message = err.message || 'Internal server error';
+  const status = err.status || err.response?.status || 500;
+  const message = status >= 500 ? 'Internal server error' : (err.message || 'Request failed');
 
   res.status(status).json({
     error: {
-      message,
-      ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+      message
     }
   });
 }

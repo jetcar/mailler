@@ -261,7 +261,10 @@ export default function Inbox() {
       return;
     }
 
-    const sessionId = `import-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const randomId = typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) => byte.toString(16).padStart(2, '0')).join('');
+    const sessionId = `import-${randomId}`;
     let eventSource = null;
     let importCompleted = false;
 

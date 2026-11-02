@@ -1,55 +1,17 @@
 const passport = require('passport');
 const CustomStrategy = require('passport-custom').Strategy;
-const { Issuer, generators, custom } = require('openid-client');
+const { Issuer, generators } = require('openid-client');
 const { User, EmailAccount } = require('../models');
-const http = require('http');
-const https = require('https');
 const { logger } = require('../middleware/errorHandler');
+const { safeErrorMetadata } = require('../utils/safeErrorMetadata');
 
 let client = null;
 let issuer = null;
-const allowInsecureOidcTls = process.env.ALLOW_INSECURE_OIDC_TLS === 'true';
-
-// Custom HTTP options for development (accept self-signed certificates)
-const httpOptions = {
-  lookup: (options) => {
-    // Return appropriate agent based on protocol
-    if (options.protocol === 'https:') {
-      return {
-        ...options,
-        agent: new https.Agent({
-          rejectUnauthorized: !allowInsecureOidcTls
-        })
-      };
-    } else {
-      return {
-        ...options,
-        agent: new http.Agent()
-      };
-    }
-  }
-};
 
 // Initialize OpenID Connect client with discovery
 async function initializeOIDC() {
   if (!client) {
     try {
-      // Configure custom HTTP client for openid-client only when insecure TLS is explicitly allowed
-      if (allowInsecureOidcTls) {
-        Issuer[custom.http_options] = (url, options) => {
-          const parsedUrl = new URL(url);
-          if (parsedUrl.protocol === 'https:') {
-            return {
-              ...options,
-              agent: new https.Agent({
-                rejectUnauthorized: false
-              })
-            };
-          }
-          return options;
-        };
-      }
-
       // Discover OIDC configuration from /.well-known/openid-configuration
       issuer = await Issuer.discover(process.env.OIDC_ISSUER);
 
@@ -69,26 +31,7 @@ async function initializeOIDC() {
         token_endpoint_auth_method: 'client_secret_post',
       });
 
-      // Apply custom HTTP options to client as well
-      if (allowInsecureOidcTls) {
-        client[custom.http_options] = (url, options) => {
-          const parsedUrl = new URL(url);
-          if (parsedUrl.protocol === 'https:') {
-            return {
-              ...options,
-              agent: new https.Agent({
-                rejectUnauthorized: false
-              })
-            };
-          }
-          return options;
-        };
-      }
-
       logger.info('OpenID Connect client initialized with signature validation');
-      if (allowInsecureOidcTls) {
-        logger.warn('Insecure OIDC TLS is enabled via ALLOW_INSECURE_OIDC_TLS=true');
-      }
     } catch (error) {
       logger.error('Failed to initialize OIDC client', { error: error.message });
       throw error;
@@ -125,7 +68,6 @@ passport.use('oidc', new CustomStrategy(async (req, done) => {
           hasCodeVerifier: Boolean(codeVerifier),
           hasState: Boolean(state),
           hasNonce: Boolean(nonce),
-          callbackUrl: req.originalUrl,
         });
 
         return done(null, false);
@@ -256,22 +198,13 @@ passport.use('oidc', new CustomStrategy(async (req, done) => {
     const publicIssuer = process.env.OIDC_PUBLIC_ISSUER || process.env.OIDC_ISSUER;
     const publicAuthUrl = authUrl.replace(process.env.OIDC_ISSUER, publicIssuer);
 
-    logger.info('Redirecting user to OIDC provider', { authorizationUrl: publicAuthUrl });
+    logger.info('Redirecting user to OIDC provider');
 
     // Redirect to OIDC provider
     req.res.redirect(publicAuthUrl);
 
   } catch (error) {
-    logger.error('OIDC authentication error', {
-      errorType: error.constructor?.name,
-      error: error.message,
-      stack: error.stack,
-      response: error.response ? {
-        status: error.response.status,
-        statusText: error.response.statusText,
-        data: error.response.data
-      } : undefined
-    });
+    logger.error('OIDC authentication error', safeErrorMetadata(error));
     return done(error);
   }
 }));

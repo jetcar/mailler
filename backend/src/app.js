@@ -4,7 +4,7 @@ const path = require('path');
 const helmet = require('helmet');
 const cors = require('cors');
 const session = require('express-session');
-const RedisStore = require('connect-redis').default;
+const SessionRedisStore = require('connect-redis').default;
 const { createClient } = require('redis');
 const { passport } = require('./config/passport');
 require('dotenv').config();
@@ -14,6 +14,7 @@ const { testConnection } = require('./config/database');
 const { initializeDatabase } = require('./utils/migrationRunner');
 const smtpListener = require('./services/smtp-listener');
 const { logger } = require('./middleware/errorHandler');
+const { createLimiter } = require('./middleware/rateLimiter');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -115,7 +116,7 @@ async function resolveSessionStore() {
     await client.connect();
     redisClient = client;
 
-    return new RedisStore({
+    return new SessionRedisStore({
       client,
       prefix: 'mailler:sess:',
       ttl: 24 * 60 * 60
@@ -180,28 +181,22 @@ function configureRuntime() {
   app.use(passport.session());
 
   app.use((req, res, next) => {
-    if (req.originalUrl === '/health' || req.originalUrl.endsWith('/health')) {
+    if (req.path === '/health' || req.path.endsWith('/health')) {
       return next();
     }
 
     logger.debug('Incoming request', {
       method: req.method,
-      url: req.originalUrl,
+      path: req.path,
       authenticated: req.isAuthenticated()
     });
 
     if (Object.keys(req.query).length > 0) {
-      logger.debug('Request query', { query: req.query });
+      logger.debug('Request query received', { queryKeys: Object.keys(req.query) });
     }
 
     if ((req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') && req.body) {
-      const sanitizedBody = { ...req.body };
-      ['password', 'imap_password', 'smtp_password'].forEach((field) => {
-        if (sanitizedBody[field]) {
-          sanitizedBody[field] = '***';
-        }
-      });
-      logger.debug('Request body', { body: sanitizedBody });
+      logger.debug('Request body received', { bodyKeys: Object.keys(req.body) });
     }
 
     next();
@@ -222,17 +217,30 @@ function configureRuntime() {
   const authRoutes = require('./routes/auth');
   const messageRoutes = require('./routes/messages');
   const accountRoutes = require('./routes/accounts');
+  const authLimiter = createLimiter({
+    limit: 30,
+    prefix: 'mailler:rate-limit:auth:',
+    redisClient
+  });
+  const apiLimiter = createLimiter({
+    limit: 300,
+    prefix: 'mailler:rate-limit:api:',
+    redisClient
+  });
 
-  app.use('/auth', authRoutes);
-  app.use('/api/messages', messageRoutes);
-  app.use('/api/accounts', accountRoutes);
-  app.use('/webmail', authRoutes);
+  app.use('/auth', authLimiter, authRoutes);
+  app.use('/api/messages', apiLimiter, messageRoutes);
+  app.use('/api/accounts', apiLimiter, accountRoutes);
+  app.use('/webmail', authLimiter, authRoutes);
 
   if (appBasePath) {
-    app.use(buildMountedPath('/auth'), authRoutes);
-    app.use(buildMountedPath('/api/messages'), messageRoutes);
-    app.use(buildMountedPath('/api/accounts'), accountRoutes);
-    app.use(buildMountedPath('/webmail'), authRoutes);
+    app.use(buildMountedPath('/auth'), authLimiter, authRoutes);
+    app.use(buildMountedPath('/api/messages'), apiLimiter, messageRoutes);
+    app.use(buildMountedPath('/api/accounts'), apiLimiter, accountRoutes);
+    app.use(buildMountedPath('/webmail'), authLimiter, authRoutes);
+    ['/login', '/callback', '/oauth2/authorize', '/logout', '/me'].forEach((routePath) => {
+      app.use(buildMountedPath(routePath), authLimiter);
+    });
     app.use(appBasePath, authRoutes);
   }
 

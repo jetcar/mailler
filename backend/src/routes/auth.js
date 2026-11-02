@@ -8,7 +8,6 @@ const router = express.Router();
 // Login route - initiates OIDC flow with PKCE
 router.get('/login', (req, res, next) => {
   logger.info('OIDC login requested', {
-    url: req.originalUrl,
     hasSession: Boolean(req.session)
   });
   next();
@@ -18,7 +17,6 @@ router.get('/login', (req, res, next) => {
 router.get('/callback',
   (req, res, next) => {
     logger.info('OIDC callback received', {
-      url: req.originalUrl,
       queryKeys: Object.keys(req.query || {})
     });
     next();
@@ -41,7 +39,6 @@ router.get('/callback',
 router.get('/oauth2/authorize',
   (req, res, next) => {
     logger.info('Alternate OIDC callback received', {
-      url: req.originalUrl,
       queryKeys: Object.keys(req.query || {})
     });
     next();
