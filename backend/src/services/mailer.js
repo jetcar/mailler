@@ -1,5 +1,6 @@
 const nodemailer = require('nodemailer');
 const { EmailAccount, Message } = require('../models');
+const { sendSanitizedEmail } = require('../utils/sanitizeEmailHtml');
 
 class MailerService {
   /**
@@ -21,11 +22,13 @@ class MailerService {
         port: process.env.SMTP_SEND_PORT || 587,
         secure: false,
         ignoreTLS: true, // For local server, we don't need TLS
-        auth: undefined // No authentication for local server
+        auth: undefined, // No authentication for local server
+        disableFileAccess: true,
+        disableUrlAccess: true
       });
 
       // Send email
-      const info = await transporter.sendMail({
+      const { info, safeHtml } = await sendSanitizedEmail(transporter, {
         from: account.email_address,
         to: mailOptions.to,
         cc: mailOptions.cc,
@@ -48,7 +51,7 @@ class MailerService {
         cc_addresses: mailOptions.cc || '',
         subject: mailOptions.subject || '(no subject)',
         body_text: mailOptions.text || '',
-        body_html: mailOptions.html || '',
+        body_html: safeHtml || '',
         received_date: new Date(),
         folder: 'SENT',
         is_read: true,

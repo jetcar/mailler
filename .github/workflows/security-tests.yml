@@ -1,0 +1,52 @@
+name: Security tests
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  node-security-tests:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            test-oidc-provider/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Run backend security tests
+        working-directory: backend
+        env:
+          TEST_REDIS_URL: redis://127.0.0.1:6379
+        run: npm test -- --runInBand tests/sanitize-email-html.test.js tests/safe-error-metadata.test.js tests/rate-limiter.redis.test.js
+
+      - name: Install test OIDC provider dependencies
+        working-directory: test-oidc-provider
+        run: npm ci
+
+      - name: Run test OIDC provider security tests
+        working-directory: test-oidc-provider
+        run: npm test

@@ -67,7 +67,7 @@ The setup script will:
 
 #### 1. Prerequisites
 
-- Node.js 16+
+- Node.js 20.19+ or 22.12+
 - PostgreSQL 13+
 - OIDC provider account (Auth0, Keycloak, Okta, Google, or another standards-compliant provider)
 
@@ -217,8 +217,6 @@ AUTO_MIGRATE=true
 APP_BASE_PATH=/mailler
 SMTP_PORTS=25,587,465
 
-# Optional for self-signed HTTPS OIDC providers in development only
-ALLOW_INSECURE_OIDC_TLS=false
 ```
 
 Notes:

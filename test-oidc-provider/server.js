@@ -3,8 +3,6 @@ const express = require('express');
 const cors = require('cors');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
-const jose = require('node-jose');
-const nodemailer = require('nodemailer');
 
 const app = express();
 const PORT = process.env.PORT || 9000;
@@ -20,16 +18,16 @@ app.use(express.urlencoded({ extended: true }));
 // Logging middleware - skip health checks
 app.use((req, res, next) => {
     // Skip logging health check requests
-    if (req.originalUrl === '/health' || req.method === 'HEAD') {
+    if (req.path === '/health' || req.method === 'HEAD') {
         return next();
     }
 
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
     if (Object.keys(req.query).length > 0) {
-        console.log('  Query:', JSON.stringify(req.query));
+        console.log('  Query keys:', Object.keys(req.query).join(', '));
     }
     if (req.body && Object.keys(req.body).length > 0) {
-        console.log('  Body:', JSON.stringify(req.body));
+        console.log('  Body keys:', Object.keys(req.body).join(', '));
     }
     next();
 });
@@ -58,12 +56,21 @@ const CLIENT_SECRET = process.env.CLIENT_SECRET || 'local-test-client-secret';
 const MAILLER_API_URL = process.env.MAILLER_API_URL || 'http://localhost:3000';
 
 // Generate RSA key pair for JWT signing
-let keystore;
+let publicJwk;
 let signingKey;
 
 async function initializeKeys() {
-    keystore = jose.JWK.createKeyStore();
-    signingKey = await keystore.generate('RSA', 2048, { alg: 'RS256', use: 'sig', kid: 'test-key-1' });
+    const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', {
+        modulusLength: 2048
+    });
+
+    publicJwk = {
+        ...publicKey.export({ format: 'jwk' }),
+        alg: 'RS256',
+        use: 'sig',
+        kid: 'test-key-1'
+    };
+    signingKey = privateKey;
     console.log('✅ RSA key pair generated for JWT signing');
 }
 
@@ -116,14 +123,12 @@ app.get('/.well-known/openid-configuration', (req, res) => {
 app.get('/.well-known/jwks.json', (req, res) => {
     console.log('🔑 JWKS endpoint called');
 
-    const jwks = keystore.toJSON();
-    res.json(jwks);
+    res.json({ keys: [publicJwk] });
 });
 
 // Authorization endpoint
 app.get('/authorize', (req, res) => {
     console.log('\n🚀 Authorization request received');
-    console.log('Parameters:', JSON.stringify(req.query, null, 2));
 
     const {
         client_id,
@@ -135,6 +140,14 @@ app.get('/authorize', (req, res) => {
         code_challenge,
         code_challenge_method
     } = req.query;
+
+    const requiredParams = [client_id, redirect_uri, response_type, scope];
+    const optionalParams = [state, nonce, code_challenge, code_challenge_method];
+    if (requiredParams.some((value) => typeof value !== 'string')
+        || optionalParams.some((value) => value !== undefined && typeof value !== 'string')) {
+        console.error('❌ Invalid authorization parameter type');
+        return res.status(400).send('Invalid authorization parameters');
+    }
 
     // Validate client_id
     if (client_id !== CLIENT_ID) {
@@ -161,12 +174,6 @@ app.get('/authorize', (req, res) => {
     }
 
     console.log('✅ Authorization request validated');
-    console.log('  Client:', client_id);
-    console.log('  Redirect URI:', redirect_uri);
-    console.log('  Scope:', scope);
-    console.log('  State:', state);
-    console.log('  Nonce:', nonce);
-    console.log('  Code Challenge Method:', code_challenge_method);
 
     // Generate authorization code
     const code = crypto.randomBytes(32).toString('base64url');
@@ -183,7 +190,7 @@ app.get('/authorize', (req, res) => {
         expires_at: Date.now() + (parseInt(process.env.CODE_EXPIRATION) || 300) * 1000
     });
 
-    console.log('✅ Authorization code generated:', code.substring(0, 20) + '...');
+    console.log('✅ Authorization code generated');
     console.log('🔄 Auto-approving and redirecting user...\n');
 
     // Auto-approve and redirect back with code
@@ -193,14 +200,13 @@ app.get('/authorize', (req, res) => {
         redirectUrl.searchParams.set('state', state);
     }
 
-    console.log('🌐 Redirecting to:', redirectUrl.toString());
+    console.log('🌐 Redirecting to registered callback');
     res.redirect(redirectUrl.toString());
 });
 
 // Token endpoint
 app.post('/token', async (req, res) => {
     console.log('\n🔐 Token request received');
-    console.log('Body:', JSON.stringify(req.body, null, 2));
 
     const {
         grant_type,
@@ -210,6 +216,13 @@ app.post('/token', async (req, res) => {
         client_secret,
         code_verifier
     } = req.body;
+
+    if ([grant_type, code, redirect_uri, client_id, client_secret]
+        .some((value) => typeof value !== 'string')
+        || (code_verifier !== undefined && typeof code_verifier !== 'string')) {
+        console.error('❌ Invalid token parameter type');
+        return res.status(400).json({ error: 'invalid_request' });
+    }
 
     // Validate client credentials
     if (client_id !== CLIENT_ID || client_secret !== CLIENT_SECRET) {
@@ -269,7 +282,6 @@ app.post('/token', async (req, res) => {
     authorizationCodes.delete(code);
 
     console.log('✅ Authorization code validated');
-    console.log('📝 Generating tokens for user:', authData.user.email);
 
     // Generate access token
     const accessToken = crypto.randomBytes(32).toString('base64url');
@@ -296,18 +308,12 @@ app.post('/token', async (req, res) => {
     };
 
     // Sign ID token with RSA private key
-    const idToken = await new Promise((resolve, reject) => {
-        jose.JWS.createSign({ format: 'compact' }, signingKey)
-            .update(JSON.stringify(idTokenPayload))
-            .final()
-            .then(result => resolve(result))
-            .catch(reject);
+    const idToken = jwt.sign(idTokenPayload, signingKey, {
+        algorithm: 'RS256',
+        keyid: publicJwk.kid
     });
 
     console.log('✅ Tokens generated successfully');
-    console.log('  Access Token:', accessToken.substring(0, 20) + '...');
-    console.log('  ID Token (signed with RS256):', idToken.substring(0, 50) + '...');
-    console.log('  ID Token Claims:', JSON.stringify(idTokenPayload, null, 2));
 
     // Return tokens
     res.json({
@@ -348,7 +354,7 @@ app.get('/userinfo', (req, res) => {
     }
 
     console.log('✅ Access token validated');
-    console.log('📤 Returning user info for:', tokenData.user.email);
+    console.log('📤 Returning user info');
 
     // Return user info based on scope
     const scopes = tokenData.scope.split(' ');
@@ -492,25 +498,23 @@ async function start() {
     try {
         await initializeKeys();
 
-        app.listen(PORT, () => {
+        const server = app.listen(PORT, () => {
             console.log('\n==============================================');
             console.log('🚀 Test OIDC Provider running');
             console.log('==============================================');
             console.log(`Issuer: ${ISSUER}`);
             console.log(`Discovery: ${ISSUER}/.well-known/openid-configuration`);
-            console.log(`\nClient Credentials:`);
-            console.log(`  Client ID: ${CLIENT_ID}`);
-            console.log(`  Client Secret: ${CLIENT_SECRET}`);
-            console.log(`\nHardcoded User:`);
-            console.log(`  Subject: ${HARDCODED_USER.sub}`);
-            console.log(`  Email: ${HARDCODED_USER.email}`);
-            console.log(`  Name: ${HARDCODED_USER.name}`);
             console.log('==============================================\n');
         });
+        return server;
     } catch (error) {
         console.error('Failed to start server:', error);
         process.exit(1);
     }
 }
 
-start();
+if (require.main === module) {
+    start();
+}
+
+module.exports = { app, initializeKeys, start };
