@@ -1,10 +1,12 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import DOMPurify from 'dompurify';
 import { useParams, useNavigate, useSearchParams, useOutletContext } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { messagesAPI } from '../services/api';
 import { logger } from '../utils/logger';
 
 export default function MessageDetail() {
+    const { i18n, t } = useTranslation();
     const { messageId } = useParams();
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
@@ -49,27 +51,27 @@ export default function MessageDetail() {
     };
 
     const handleDelete = async () => {
-        if (!confirm('Delete this message?')) return;
+        if (!confirm(t('messages.deleteConfirm'))) return;
         await onDeleteMessage(numericMessageId);
         handleBack();
     };
 
     if (!message) {
-        return <div style={styles.placeholder}>Loading...</div>;
+        return <div style={styles.placeholder}>{t('messages.loading')}</div>;
     }
 
     return (
         <div style={styles.container}>
             <div style={styles.toolbar}>
-                <button style={styles.backBtn} onClick={handleBack}>← Back to List</button>
-                <button style={styles.deleteBtn} onClick={handleDelete}>🗑️ Delete</button>
+                <button style={styles.backBtn} onClick={handleBack}>← {t('messages.backToList')}</button>
+                <button style={styles.deleteBtn} onClick={handleDelete}>🗑️ {t('messages.delete')}</button>
             </div>
             <h2 style={styles.subject}>{message.subject}</h2>
             <div style={styles.meta}>
-                <div><strong>From:</strong> {message.from_address}</div>
-                <div><strong>To:</strong> {message.to_addresses}</div>
-                {message.cc_addresses && <div><strong>CC:</strong> {message.cc_addresses}</div>}
-                <div><strong>Date:</strong> {new Date(message.received_date).toLocaleString()}</div>
+                <div><strong>{t('messages.from')}</strong> {message.from_address}</div>
+                <div><strong>{t('messages.to')}</strong> {message.to_addresses}</div>
+                {message.cc_addresses && <div><strong>{t('messages.cc')}</strong> {message.cc_addresses}</div>}
+                <div><strong>{t('messages.date')}</strong> {new Date(message.received_date).toLocaleString(i18n.resolvedLanguage)}</div>
             </div>
             <hr />
             <div style={styles.body}>

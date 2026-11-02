@@ -6,6 +6,7 @@ import MessageList from './components/MessageList';
 import MessageDetail from './components/MessageDetail';
 import Compose from './components/Compose';
 import Settings from './components/Settings';
+import LanguageSelector from './components/LanguageSelector';
 import './App.css';
 import { getApiBaseUrl, routerBasename } from './config/appPaths';
 import { logger } from './utils/logger';
@@ -37,6 +38,7 @@ export default function App() {
   return (
     <BrowserRouter basename={routerBasename}>
       <NavigationLogger />
+      <LanguageSelector />
       <Routes>
         <Route path="/" element={<Login />} />
         <Route path="/inbox" element={<Inbox />}>

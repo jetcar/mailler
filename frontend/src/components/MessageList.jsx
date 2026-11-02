@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { useOutletContext, useNavigate, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 
 export default function MessageList() {
+    const { i18n, t } = useTranslation();
     const { messages, filteredMessages, accounts, selectedFolder, currentPage, itemsPerPage, onDeleteSelected, onSearch, searchQuery } = useOutletContext();
     const navigate = useNavigate();
     const [, setSearchParams] = useSearchParams();
@@ -38,7 +40,7 @@ export default function MessageList() {
     };
 
     const handleDeleteSelected = async () => {
-        if (!confirm(`Delete ${selectedMessageIds.size} selected message(s)?`)) return;
+        if (!confirm(t('messages.deleteSelectedConfirm', { count: selectedMessageIds.size }))) return;
         await onDeleteSelected(Array.from(selectedMessageIds));
         setSelectedMessageIds(new Set());
     };
@@ -66,32 +68,33 @@ export default function MessageList() {
                             type="checkbox"
                             checked={paginatedMessages.length > 0 && paginatedMessages.every(msg => selectedMessageIds.has(msg.id))}
                             onChange={toggleSelectAll}
+                            aria-label={t('messages.selectAll')}
                             style={styles.checkbox}
                         />
                         <span>
                             {selectedMessageIds.size > 0
-                                ? `${selectedMessageIds.size} selected`
-                                : `${folderFilteredMessages.length} message${folderFilteredMessages.length !== 1 ? 's' : ''}`}
+                                ? t('messages.selected', { count: selectedMessageIds.size })
+                                : t('messages.count', { count: folderFilteredMessages.length })}
                         </span>
                     </label>
                     {selectedMessageIds.size > 0 && (
                         <button style={{ ...styles.buttonDanger, marginLeft: '1rem' }} onClick={handleDeleteSelected}>
-                            🗑️ Delete ({selectedMessageIds.size})
+                            🗑️ {t('messages.deleteSelected', { count: selectedMessageIds.size })}
                         </button>
                     )}
                 </div>
                 {totalPages > 1 && (
                     <div style={styles.pagination}>
-                        <span style={styles.pageInfo}>Page {currentPage} of {totalPages}</span>
-                        <button onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 1} style={{ ...styles.pageBtn, ...(currentPage === 1 ? styles.pageBtnDisabled : {}) }}>←</button>
-                        <button onClick={() => goToPage(currentPage + 1)} disabled={currentPage === totalPages} style={{ ...styles.pageBtn, ...(currentPage === totalPages ? styles.pageBtnDisabled : {}) }}>→</button>
+                        <span style={styles.pageInfo}>{t('messages.page', { current: currentPage, total: totalPages })}</span>
+                        <button aria-label={t('messages.previousPage')} onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 1} style={{ ...styles.pageBtn, ...(currentPage === 1 ? styles.pageBtnDisabled : {}) }}>←</button>
+                        <button aria-label={t('messages.nextPage')} onClick={() => goToPage(currentPage + 1)} disabled={currentPage === totalPages} style={{ ...styles.pageBtn, ...(currentPage === totalPages ? styles.pageBtnDisabled : {}) }}>→</button>
                     </div>
                 )}
             </div>
 
             {paginatedMessages.length === 0 ? (
                 <div style={styles.empty}>
-                    <p>{searchQuery ? 'No messages match your search' : 'No messages in this folder. Click Sync to fetch emails.'}</p>
+                    <p>{searchQuery ? t('messages.noSearchResults') : t('messages.noFolderMessages')}</p>
                 </div>
             ) : (
                 <ul style={styles.list}>
@@ -107,12 +110,13 @@ export default function MessageList() {
                                 checked={selectedMessageIds.has(msg.id)}
                                 onChange={(e) => { e.stopPropagation(); toggleSelectMessage(msg.id); }}
                                 onClick={(e) => e.stopPropagation()}
+                                aria-label={t('messages.selectMessage', { subject: msg.subject })}
                                 style={styles.checkbox}
                             />
                             <div style={styles.itemContent} onClick={() => openMessage(msg)}>
                                 <div style={styles.from}>{msg.from_address}</div>
                                 <div style={styles.subject}>{msg.subject}</div>
-                                <div style={styles.date}>{new Date(msg.received_date).toLocaleDateString()}</div>
+                                <div style={styles.date}>{new Date(msg.received_date).toLocaleDateString(i18n.resolvedLanguage)}</div>
                             </div>
                         </li>
                     ))}

@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { accountsAPI } from '../services/api';
 import { logger } from '../utils/logger';
 
 export default function Settings() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [accounts, setAccounts] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
@@ -46,7 +48,7 @@ export default function Settings() {
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('Are you sure you want to delete this account?')) return;
+    if (!confirm(t('settings.deleteConfirm'))) return;
 
     try {
       await accountsAPI.delete(id);
@@ -59,31 +61,31 @@ export default function Settings() {
   return (
     <div style={styles.container}>
       <header style={styles.header}>
-        <h1>⚙️ Settings</h1>
+        <h1>⚙️ {t('settings.title')}</h1>
         <button style={styles.button} onClick={() => navigate('/inbox')}>
-          Back to Inbox
+          {t('settings.backToInbox')}
         </button>
       </header>
 
       <main style={styles.main}>
         <section style={styles.section}>
           <div style={styles.sectionHeader}>
-            <h2>Email Accounts</h2>
+            <h2>{t('settings.accounts')}</h2>
             <button style={styles.addButton} onClick={() => setShowForm(!showForm)}>
-              {showForm ? 'Cancel' : '+ Add Account'}
+              {showForm ? t('common.cancel') : t('settings.addAccountButton')}
             </button>
           </div>
 
           {showForm && (
             <form onSubmit={handleSubmit} style={styles.form}>
-              <h3>Add Email Account</h3>
+              <h3>{t('settings.addAccountTitle')}</h3>
               <p style={styles.helpText}>
-                Accounts now store only the local email address and default flag. Import credentials are entered only when you run a Gmail import.
+                {t('settings.accountHelp')}
               </p>
 
               <div style={styles.formRow}>
                 <div style={styles.field}>
-                  <label style={styles.label}>Email Address *</label>
+                  <label style={styles.label}>{t('settings.emailAddress')}</label>
                   <input
                     type="email"
                     name="email_address"
@@ -104,32 +106,32 @@ export default function Settings() {
                   id="is_default"
                 />
                 <label htmlFor="is_default" style={styles.checkboxLabel}>
-                  Set as default account
+                  {t('settings.setDefault')}
                 </label>
               </div>
 
               <button type="submit" style={styles.submitButton}>
-                Add Account
+                {t('settings.addAccount')}
               </button>
             </form>
           )}
 
           <div style={styles.accountsList}>
             {accounts.length === 0 ? (
-              <p style={styles.empty}>No email accounts configured. Add one to get started.</p>
+              <p style={styles.empty}>{t('settings.empty')}</p>
             ) : (
               accounts.map(account => (
                 <div key={account.id} style={styles.accountCard}>
                   <div style={styles.accountInfo}>
                     <h3>{account.email_address}</h3>
-                    {account.is_default && <span style={styles.badge}>Default</span>}
-                    <p style={styles.accountDetails}>Local account used for sending and organizing imported mail.</p>
+                    {account.is_default && <span style={styles.badge}>{t('settings.defaultBadge')}</span>}
+                    <p style={styles.accountDetails}>{t('settings.accountDetails')}</p>
                   </div>
                   <button
                     style={styles.deleteButton}
                     onClick={() => handleDelete(account.id)}
                   >
-                    Delete
+                    {t('common.delete')}
                   </button>
                 </div>
               ))

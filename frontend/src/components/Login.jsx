@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { authAPI } from '../services/api';
 import { logger } from '../utils/logger';
 
 export default function Login() {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
@@ -34,7 +36,7 @@ export default function Login() {
     return (
       <div style={styles.container}>
         <div style={styles.card}>
-          <p>Loading...</p>
+          <p>{t('common.loading')}</p>
         </div>
       </div>
     );
@@ -44,9 +46,9 @@ export default function Login() {
     <div style={styles.container}>
       <div style={styles.card}>
         <h1 style={styles.title}>📧 Mailler</h1>
-        <p style={styles.subtitle}>Email Management Platform</p>
+        <p style={styles.subtitle}>{t('login.subtitle')}</p>
         <button style={styles.button} onClick={handleLogin}>
-          Login with OpenID Connect
+          {t('login.action')}
         </button>
       </div>
     </div>

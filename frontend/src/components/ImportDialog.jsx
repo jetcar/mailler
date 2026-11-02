@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { styles } from './Inbox.styles';
 
 export default function ImportDialog({
@@ -15,6 +16,7 @@ export default function ImportDialog({
     onFetchFolders,
     onImport
 }) {
+    const { t } = useTranslation();
     const selectedFolderCount = Object.values(selectedFolders).filter(Boolean).length;
 
     const handleSelectAllFolders = () => {
@@ -26,13 +28,13 @@ export default function ImportDialog({
     };
 
     return (
-        <div style={styles.modal}>
+        <div style={styles.modal} role="dialog" aria-modal="true" aria-labelledby="gmail-import-title">
             <div style={styles.modalContent}>
-                <h2>Import from Gmail - Step {importStep} of 2</h2>
+                <h2 id="gmail-import-title">{t('import.title', { step: importStep })}</h2>
 
                 {importError && (
                     <div style={styles.errorBox}>
-                        <strong>Import could not start</strong><br />
+                        <strong>{t('import.errorTitle')}</strong><br />
                         {importError}
                     </div>
                 )}
@@ -40,21 +42,21 @@ export default function ImportDialog({
                 {importStep === 1 ? (
                     <>
                         <div style={styles.warningBox}>
-                            <strong>⚠️ Gmail App Password Required</strong><br />
-                            Gmail requires an App Password (not your regular password).<br />
+                            <strong>⚠️ {t('import.appPasswordTitle')}</strong><br />
+                            {t('import.appPasswordHelp')}<br />
                             <a
                                 href="https://myaccount.google.com/apppasswords"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 style={styles.link}
                             >
-                                Click here to generate an App Password →
+                                {t('import.appPasswordLink')} →
                             </a>
                         </div>
 
                         <form onSubmit={onFetchFolders}>
                             <div style={styles.formGroup}>
-                                <label>IMAP Host:</label>
+                                <label>{t('import.imapHost')}</label>
                                 <input
                                     type="text"
                                     value={importData.imap_host}
@@ -64,7 +66,7 @@ export default function ImportDialog({
                             </div>
 
                             <div style={styles.formGroup}>
-                                <label>Port:</label>
+                                <label>{t('import.port')}</label>
                                 <input
                                     type="number"
                                     value={importData.imap_port}
@@ -74,24 +76,24 @@ export default function ImportDialog({
                             </div>
 
                             <div style={styles.formGroup}>
-                                <label>Gmail Address:</label>
+                                <label>{t('import.gmailAddress')}</label>
                                 <input
                                     type="email"
                                     value={importData.imap_username}
                                     onChange={(event) => setImportData({ ...importData, imap_username: event.target.value })}
-                                    placeholder="your-email@gmail.com"
+                                    placeholder={t('import.gmailPlaceholder')}
                                     required
                                     style={styles.input}
                                 />
                             </div>
 
                             <div style={styles.formGroup}>
-                                <label>App Password:</label>
+                                <label>{t('import.appPassword')}</label>
                                 <input
                                     type="password"
                                     value={importData.imap_password}
                                     onChange={(event) => setImportData({ ...importData, imap_password: event.target.value })}
-                                    placeholder="16-character app password"
+                                    placeholder={t('import.appPasswordPlaceholder')}
                                     required
                                     style={styles.input}
                                 />
@@ -99,10 +101,10 @@ export default function ImportDialog({
 
                             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
                                 <button type="button" onClick={onClose} style={styles.button}>
-                                    Cancel
+                                    {t('common.cancel')}
                                 </button>
                                 <button type="submit" style={styles.buttonPrimary} disabled={isImportActionPending}>
-                                    {isImportActionPending ? 'Connecting...' : 'Next: Select Folders →'}
+                                    {isImportActionPending ? t('import.connecting') : `${t('import.next')} →`}
                                 </button>
                             </div>
                         </form>
@@ -110,18 +112,18 @@ export default function ImportDialog({
                 ) : (
                     <>
                         <div style={styles.infoBox}>
-                            <strong>📁 Found {availableFolders.length} folders</strong><br />
-                            Select the folders you want to import. All emails will be imported from each selected folder, processing in batches of 10 messages for better progress tracking.
+                            <strong>📁 {t('import.foundFolders', { count: availableFolders.length })}</strong><br />
+                            {t('import.folderHelp')}
                         </div>
 
                         <form onSubmit={onImport}>
                             <div style={styles.folderList}>
                                 <div style={styles.folderControls}>
                                     <button type="button" onClick={handleSelectAllFolders} style={styles.smallButton}>
-                                        Select All
+                                        {t('import.selectAll')}
                                     </button>
                                     <button type="button" onClick={() => setSelectedFolders({})} style={styles.smallButton}>
-                                        Clear All
+                                        {t('import.clearAll')}
                                     </button>
                                 </div>
 
@@ -145,17 +147,17 @@ export default function ImportDialog({
 
                             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '1rem' }}>
                                 <button type="button" onClick={onBack} style={styles.button}>
-                                    ← Back
+                                    ← {t('common.back')}
                                 </button>
                                 <button type="button" onClick={onClose} style={styles.button}>
-                                    Cancel
+                                    {t('common.cancel')}
                                 </button>
                                 <button
                                     type="submit"
                                     style={styles.buttonSuccess}
                                     disabled={isImportActionPending || selectedFolderCount === 0}
                                 >
-                                    {isImportActionPending ? 'Importing...' : `Import ${selectedFolderCount} Folders`}
+                                    {isImportActionPending ? t('import.importing') : t('import.importFolders', { count: selectedFolderCount })}
                                 </button>
                             </div>
                         </form>

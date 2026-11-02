@@ -1,7 +1,9 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { styles } from './Inbox.styles';
 
 export default function ImportProgressOverlay({ importProgress, logsContainerRef, onStopImport }) {
+    const { i18n, t } = useTranslation();
     if (!importProgress.isImporting) {
         return null;
     }
@@ -13,40 +15,40 @@ export default function ImportProgressOverlay({ importProgress, logsContainerRef
     return (
         <div style={styles.overlay}>
             <div style={styles.progressCard}>
-                <h2 style={{ margin: '0 0 1.5rem 0' }}>📥 Importing Emails</h2>
+                <h2 style={{ margin: '0 0 1.5rem 0' }}>📥 {t('import.progressTitle')}</h2>
 
                 <div style={styles.progressInfo}>
                     <div style={styles.progressBar}>
                         <div style={{ ...styles.progressBarFill, width: `${progressPercent}%` }} />
                     </div>
-                    <div style={styles.progressText}>
-                        Folder {completedFolders} of {totalFolders}
+                    <div style={styles.progressText} role="status" aria-live="polite">
+                        {t('import.folderProgress', { completed: completedFolders, total: totalFolders })}
                     </div>
                 </div>
 
                 <div style={styles.statsGrid}>
                     <div style={styles.statItem}>
                         <div style={styles.statValue}>{importProgress.totalImported}</div>
-                        <div style={styles.statLabel}>Imported</div>
+                        <div style={styles.statLabel}>{t('import.imported')}</div>
                     </div>
                     <div style={styles.statItem}>
                         <div style={styles.statValue}>{importProgress.totalSkipped}</div>
-                        <div style={styles.statLabel}>Skipped</div>
+                        <div style={styles.statLabel}>{t('import.skipped')}</div>
                     </div>
                     <div style={styles.statItem}>
                         <div style={styles.statValue}>{completedFolders}</div>
-                        <div style={styles.statLabel}>Completed</div>
+                        <div style={styles.statLabel}>{t('import.completed')}</div>
                     </div>
                 </div>
 
                 {importProgress.logs.length > 0 && (
                     <div style={styles.logsSection}>
-                        <h3 style={styles.sectionCaption}>Import Logs:</h3>
+                        <h3 style={styles.sectionCaption}>{t('import.logs')}</h3>
                         <div style={styles.logsContainer} ref={logsContainerRef}>
                             {importProgress.logs.slice(-20).map((log, index) => (
                                 <div key={index} style={styles.logEntry}>
                                     <span style={styles.logTimestamp}>
-                                        {new Date(log.timestamp).toLocaleTimeString()}
+                                        {new Date(log.timestamp).toLocaleTimeString(i18n.resolvedLanguage)}
                                     </span>
                                     <span
                                         style={{
@@ -68,7 +70,7 @@ export default function ImportProgressOverlay({ importProgress, logsContainerRef
 
                 {completedFolders > 0 && (
                     <div style={styles.folderResults}>
-                        <h3 style={styles.sectionCaption}>Folder Details:</h3>
+                        <h3 style={styles.sectionCaption}>{t('import.folderDetails')}</h3>
                         <div style={styles.folderResultsList}>
                             {importProgress.folderResults.map((folder, index) => (
                                 <div key={index} style={styles.folderResultItem}>
@@ -78,10 +80,10 @@ export default function ImportProgressOverlay({ importProgress, logsContainerRef
                                             <span style={{ color: 'var(--danger)' }}>❌ {folder.error}</span>
                                         ) : (
                                             <>
-                                                <span style={{ color: 'var(--success)' }}>✅ {folder.imported} imported</span>
+                                                <span style={{ color: 'var(--success)' }}>✅ {t('import.folderImported', { count: folder.imported })}</span>
                                                 {folder.skipped > 0 && (
                                                     <span style={{ color: 'var(--text-muted)', marginLeft: '0.5rem' }}>
-                                                        ⏭️ {folder.skipped} skipped
+                                                        ⏭️ {t('import.folderSkipped', { count: folder.skipped })}
                                                     </span>
                                                 )}
                                             </>
@@ -105,7 +107,7 @@ export default function ImportProgressOverlay({ importProgress, logsContainerRef
                             fontWeight: 'bold'
                         }}
                     >
-                        🛑 Stop Import
+                        🛑 {t('import.stop')}
                     </button>
                 </div>
             </div>
