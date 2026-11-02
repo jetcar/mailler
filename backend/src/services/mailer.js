@@ -1,6 +1,6 @@
 const nodemailer = require('nodemailer');
 const { EmailAccount, Message } = require('../models');
-const { sanitizeEmailHtml } = require('../utils/sanitizeEmailHtml');
+const { sendSanitizedEmail } = require('../utils/sanitizeEmailHtml');
 
 class MailerService {
   /**
@@ -16,10 +16,6 @@ class MailerService {
         throw new Error('Email account not found');
       }
 
-      const safeHtml = typeof mailOptions.html === 'string'
-        ? sanitizeEmailHtml(mailOptions.html)
-        : mailOptions.html;
-
       // Create transporter using local SMTP server (no auth required for local server)
       const transporter = nodemailer.createTransport({
         host: process.env.SMTP_HOST || 'localhost',
@@ -32,17 +28,15 @@ class MailerService {
       });
 
       // Send email
-      const info = await transporter.sendMail({
+      const { info, safeHtml } = await sendSanitizedEmail(transporter, {
         from: account.email_address,
         to: mailOptions.to,
         cc: mailOptions.cc,
         bcc: mailOptions.bcc,
         subject: mailOptions.subject,
         text: mailOptions.text,
-        html: safeHtml,
-        attachments: mailOptions.attachments,
-        disableFileAccess: true,
-        disableUrlAccess: true
+        html: mailOptions.html,
+        attachments: mailOptions.attachments
       });
 
       console.log('📤 Email sent from', account.email_address, 'to', mailOptions.to);

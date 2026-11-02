@@ -1,4 +1,4 @@
-const { sanitizeEmailHtml } = require('../src/utils/sanitizeEmailHtml');
+const { sanitizeEmailHtml, sendSanitizedEmail } = require('../src/utils/sanitizeEmailHtml');
 
 describe('sanitizeEmailHtml', () => {
   test('removes executable markup and unsafe URLs', () => {
@@ -43,5 +43,25 @@ describe('sanitizeEmailHtml', () => {
     expect(result).toContain('cellpadding="8"');
     expect(result).toContain('class="hero"');
     expect(result).not.toContain('<script');
+  });
+
+  test('sends only sanitized HTML with external content access disabled', async () => {
+    const transporter = {
+      sendMail: jest.fn().mockResolvedValue({ messageId: 'test-message' })
+    };
+
+    const result = await sendSanitizedEmail(transporter, {
+      to: 'recipient@example.com',
+      html: '<p onclick="alert(1)">Hello</p><script>alert(2)</script>'
+    });
+
+    expect(result.info.messageId).toBe('test-message');
+    expect(result.safeHtml).not.toContain('onclick');
+    expect(result.safeHtml).not.toContain('<script');
+    expect(transporter.sendMail).toHaveBeenCalledWith(expect.objectContaining({
+      html: result.safeHtml,
+      disableFileAccess: true,
+      disableUrlAccess: true
+    }));
   });
 });
