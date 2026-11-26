@@ -32,6 +32,8 @@ COPY --from=dotnet-build /app/publish ./
 COPY --from=dotnet-build /src/database ./database
 COPY --from=frontend-builder /src/frontend/dist ./wwwroot
 
+USER app
+
 EXPOSE 3000
 EXPOSE 25
 EXPOSE 587

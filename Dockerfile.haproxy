@@ -1,0 +1,8 @@
+FROM haproxy:3.2-alpine
+
+USER root
+ARG OS_PATCH_RUN_ID
+RUN : "$OS_PATCH_RUN_ID" \
+    && apk upgrade --no-cache
+
+USER haproxy

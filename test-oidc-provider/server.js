@@ -1,6 +1,5 @@
 require('dotenv').config();
 const express = require('express');
-const cors = require('cors');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 
@@ -11,7 +10,6 @@ const ISSUER = process.env.ISSUER || `http://localhost:${PORT}`;
 const PUBLIC_ISSUER = process.env.PUBLIC_ISSUER || ISSUER;
 
 // Middleware
-app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -141,10 +139,14 @@ app.get('/authorize', (req, res) => {
         code_challenge_method
     } = req.query;
 
-    const requiredParams = [client_id, redirect_uri, response_type, scope];
-    const optionalParams = [state, nonce, code_challenge, code_challenge_method];
-    if (requiredParams.some((value) => typeof value !== 'string')
-        || optionalParams.some((value) => value !== undefined && typeof value !== 'string')) {
+    if (typeof client_id !== 'string'
+        || typeof redirect_uri !== 'string'
+        || typeof response_type !== 'string'
+        || typeof scope !== 'string'
+        || (state !== undefined && typeof state !== 'string')
+        || (nonce !== undefined && typeof nonce !== 'string')
+        || (code_challenge !== undefined && typeof code_challenge !== 'string')
+        || (code_challenge_method !== undefined && typeof code_challenge_method !== 'string')) {
         console.error('❌ Invalid authorization parameter type');
         return res.status(400).send('Invalid authorization parameters');
     }
