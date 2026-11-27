@@ -100,6 +100,24 @@ test('rejects parameter pollution', async () => {
     assert.equal(response.status, 400);
 });
 
+test('does not allow cross-origin access to the test provider', async () => {
+    const response = await fetch(`${issuer}/health`, {
+        headers: { Origin: 'https://untrusted.example' }
+    });
+
+    assert.equal(response.headers.has('access-control-allow-origin'), false);
+});
+
+test('rejects repeated scope parameters before processing authorization', async () => {
+    const response = await fetch(
+        `${issuer}/authorize?client_id=MailuId&redirect_uri=http%3A%2F%2F127.0.0.1%3A19999%2Fcallback&response_type=code&scope=openid&scope=profile`,
+        { redirect: 'manual' }
+    );
+
+    assert.equal(response.status, 400);
+    assert.equal(response.headers.has('location'), false);
+});
+
 test('rejects missing and incorrect PKCE verifiers without logging them', async () => {
     const redirectUri = 'http://127.0.0.1:19999/callback';
     const verifier = crypto.randomBytes(32).toString('base64url');

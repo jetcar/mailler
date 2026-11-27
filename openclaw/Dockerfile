@@ -2,7 +2,9 @@
 FROM node:22
 
 # Install git, jq and nginx
-RUN apt-get update && apt-get install -y git jq nginx && rm -rf /var/lib/apt/lists/*
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git jq nginx \
+    && rm -rf /var/lib/apt/lists/*
 
 # Create required directories
 RUN mkdir -p /root/.openclaw/credentials /root/.openclaw/workspace /root/.mcporter
